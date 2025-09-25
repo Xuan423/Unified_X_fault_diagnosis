@@ -21,6 +21,7 @@ dataset artefacts are available locally.
 from __future__ import annotations
 
 import argparse
+import sys
 from collections import OrderedDict
 from dataclasses import dataclass
 from pathlib import Path
@@ -32,6 +33,12 @@ import pandas as pd
 import seaborn as sns
 import torch
 import yaml
+
+
+# Ensure project root is on sys.path for relative imports
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
 from configs.config import config_network
 from model.TSPN import Transparent_Signal_Processing_Network
@@ -310,6 +317,7 @@ def plot_grouped_radar(
         width = 2 * np.pi / num_features
         for angle, label, group in zip(angles[:-1], feature_names, group_labels):
             color = GROUP_COLOURS.get(group, GROUP_COLOURS['Other'])
+            # 使色块和标签正对每个指标的中间
             bar = ax.bar(
                 x=[angle],
                 height=[1.1],
@@ -318,11 +326,10 @@ def plot_grouped_radar(
                 color=color,
                 linewidth=0,
                 alpha=0.6,
-                align='edge',
+                align='center',  # 居中对齐
             )
-            legend_handles[group] = bar[0]
             ax.text(
-                angle + width / 2,
+                angle,
                 1.15,
                 label,
                 color=color,
@@ -533,21 +540,28 @@ def render_summary_report(
 
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description='SEU TSPN analysis pipeline.')
-    parser.add_argument('--config', type=Path, default=Path('configs/a_010_SEU/config_basic.yaml'))
-    parser.add_argument('--checkpoint', type=Path, default=Path('save/test/model_seu/tspn.ckpt'))
-    parser.add_argument('--data', type=Path, required=True, help='Path to SEU signal array (.npy).')
-    parser.add_argument('--labels', type=Path, required=True, help='Path to SEU label array (.npy).')
+    # parser.add_argument('--config', type=Path, default=Path('configs/a_010_SEU/config_basic.yaml'))
+    # parser.add_argument('--checkpoint', type=Path, default=Path('save/test/model_seu/tspn.ckpt'))
+    # parser.add_argument('--data', type=Path, default='E:/dataset/generate/SEU_bearing/SEU_bearing_20Hz_2_data.npy', help='Path to SEU signal array (.npy).')
+    # parser.add_argument('--labels', type=Path, default='E:/dataset/generate/SEU_bearing/SEU_bearing_20Hz_2_label.npy', help='Path to SEU label array (.npy).')
+    parser.add_argument('--config', type=Path, default=Path('configs/a_temp_SUDA_electric/config_basic.yaml'))
+    parser.add_argument('--checkpoint', type=Path, default=Path('save/test/model_suda/model_tspn_suda_02.ckpt'))
+    parser.add_argument('--data', type=Path, default='E:/dataset/generate/SUDA_electric/SUDA_electric_0kg_2500r_1000Hz_data.npy', help='Path to SEU signal array (.npy).')
+    parser.add_argument('--labels', type=Path, default='E:/dataset/generate/SUDA_electric/SUDA_electric_0kg_2500r_1000Hz_label.npy', help='Path to SEU label array (.npy).')
     parser.add_argument('--speed-labels', type=Path, default=None, help='Optional speed condition labels (.npy).')
     parser.add_argument('--load-labels', type=Path, default=None, help='Optional load condition labels (.npy).')
     parser.add_argument('--class-names', type=str, nargs='*', default=None)
     parser.add_argument('--speed-names', type=str, nargs='*', default=None)
     parser.add_argument('--load-names', type=str, nargs='*', default=None)
-    parser.add_argument('--output-dir', type=Path, default=Path('save/figure/seu/analysis'))
-    parser.add_argument('--figure-format', type=str, default='png', choices=['png', 'pdf', 'svg'])
+    # parser.add_argument('--output-dir', type=Path, default=Path('save/figure/seu/analysis'))
+    parser.add_argument('--output-dir', type=Path, default=Path('save/figure/suda/analysis'))
+    parser.add_argument('--figure-format', type=str, default='svg', choices=['png', 'pdf', 'svg'])
     parser.add_argument('--batch-size', type=int, default=64)
     parser.add_argument('--device', type=str, default=None)
-    parser.add_argument('--report-path', type=Path, default=Path('reports/seu_tspn_analysis_report.md'))
-    parser.add_argument('--modal-names', type=str, nargs='*', default=['Torque', 'Vibration'])
+    # parser.add_argument('--report-path', type=Path, default=Path('reports/seu_tspn_analysis_report.md'))
+    # parser.add_argument('--modal-names', type=str, nargs='*', default=['Torque', 'Vibration'])
+    parser.add_argument('--report-path', type=Path, default=Path('reports/suda_tspn_analysis_report.md'))
+    parser.add_argument('--modal-names', type=str, nargs='*', default=['J3 axis', 'U phase', 'V phase', 'W phase', 'D axis'])
     return parser.parse_args(argv)
 
 
@@ -615,7 +629,7 @@ def main(argv: Sequence[str] | None = None) -> None:
 
     class_means, _ = aggregate_by_group(metrics_per_sample, labels)
     min_vals = class_means.min(axis=0, keepdims=True)
-    ptp_vals = class_means.ptp(axis=0, keepdims=True) + 1e-8
+    ptp_vals = np.ptp(class_means, axis=0, keepdims=True) + 1e-8
     normed_means = (class_means - min_vals) / ptp_vals
 
     radar_path = args.output_dir / 'class_radar'
