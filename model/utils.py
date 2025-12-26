@@ -7,9 +7,8 @@ from einops import rearrange
 
 KERNEL_SIZE = 49 
 FRE = 10 
-DEVICE = 'cuda'
+DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
 STRIDE = 1
-T = torch.linspace(-KERNEL_SIZE/2,KERNEL_SIZE/2, KERNEL_SIZE).view(1,1,KERNEL_SIZE).to(DEVICE) # 暂定cuda 
 
 def Morlet(t):
     C = pow(math.pi, 0.25)
@@ -29,7 +28,7 @@ def Laplace(t):
     return y
 
 class convlutional_operator(nn.Module):
-    def __init__(self, kernel_op='conv_sin', dim=1, stride=STRIDE, kernel_size=KERNEL_SIZE, device='cuda', in_channels=1):
+    def __init__(self, kernel_op='conv_sin', dim=1, stride=STRIDE, kernel_size=KERNEL_SIZE, device=DEVICE, in_channels=1):
         super().__init__()
         self.affline = nn.InstanceNorm1d(num_features=dim, affine=True).to(device)
         op_dic = {'conv_sin': torch.sin,
@@ -53,7 +52,7 @@ class convlutional_operator(nn.Module):
         return conv
 
 class signal_filter_(nn.Module):
-    def __init__(self, kernel_op='order1_MA', dim=1, stride=STRIDE, kernel_size=KERNEL_SIZE, device='cuda', in_channels=1):
+    def __init__(self, kernel_op='order1_MA', dim=1, stride=STRIDE, kernel_size=KERNEL_SIZE, device=DEVICE, in_channels=1):
         super().__init__()
         self.affline = nn.InstanceNorm1d(num_features=dim, affine=True).to(device)
         op_dic = {'order1_MA': torch.tensor([0.5, 0, 0.5]),

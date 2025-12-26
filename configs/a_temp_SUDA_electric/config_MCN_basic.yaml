@@ -3,7 +3,7 @@ args:
   device: cuda
   data_dir: 'E:/dataset/generate/SUDA_electric/' 
   dataset_task: a_temp_SUDA_basic
-  target: 'SUDA_electric_0kg_2500r_1000Hz' # HUST_bearing_20Hz, HUST_bearing_VS_0_40_0Hz
+  target: 'SUDA_electric_0kg_3000r_1000Hz' # HUST_bearing_20Hz, HUST_bearing_VS_0_40_0Hz
   target_list: ['SUDA_electric_0kg_2500r_1000Hz', 'SUDA_electric_0kg_4000r_1000Hz', 'SUDA_electric_6kg_2500r_1000Hz', 'SUDA_electric_6kg_4000r_1000Hz']
   k_shot: 64
 

@@ -67,6 +67,85 @@ class Default_generalization(Dataset):
         self.flag = flag
         self.source = args.source # 100,200,300,400,500
         self.target = args.target # 100,200,300,400,500
+        self.train_ratio = 0.7
+        self.val_ratio = 0.3
+
+
+        if self.flag in ['train', 'val']:
+            all_data, all_labels = self.load_data_labels(args, self.source)
+            train_indices, val_indices = self.split_source_indices(all_labels)
+            selected_indices = train_indices if self.flag == 'train' else val_indices
+            self.selected_data = all_data[selected_indices]
+            self.selected_labels = all_labels[selected_indices]
+
+        elif self.flag == 'test':
+            self.selected_data, self.selected_labels = self.load_data_labels(args, self.target)
+        else:
+            raise ValueError("Invalid flag. Please choose from 'train', 'val', or 'test'.")
+    
+
+    def load_data_labels(self, args,data_list):
+        if isinstance(data_list, str):
+            data_list = [data_list]
+
+        data_dict= {'data':[], 'label':[]}
+        try:
+            for data in data_list:
+                self.data = np.load(args.data_dir + 'data_' + data + '.npy').astype(np.float32)
+                self.labels = np.load(args.data_dir + 'label_' + data + '.npy').astype(np.float32)
+                self.data = torch.from_numpy(self.data)
+                self.labels = torch.from_numpy(self.labels)
+
+                data_dict['data'].append(self.data)
+                data_dict['label'].append(self.labels)
+
+            selected_data = torch.cat(data_dict['data'], 0)
+            selected_labels = torch.cat(data_dict['label'], 0)
+        except:
+            data_dict= {'data':[], 'label':[]}
+            for data in data_list:
+                self.data = np.load(args.data_dir + data + '_data'  + '.npy').astype(np.float32)
+                self.labels = np.load(args.data_dir + data + '_label' + '.npy').astype(np.float32)
+                self.data = torch.from_numpy(self.data)
+                self.labels = torch.from_numpy(self.labels)
+
+                data_dict['data'].append(self.data)
+                data_dict['label'].append(self.labels)
+
+            selected_data = torch.cat(data_dict['data'], 0)
+            selected_labels = torch.cat(data_dict['label'], 0)
+
+        return selected_data, selected_labels
+
+    def split_source_indices(self, labels):
+        labels_np = labels.cpu().numpy()
+        train_indices, val_indices = [], []
+        for label in np.unique(labels_np):
+            label_indices = np.where(labels_np == label)[0]
+            n_train = int(len(label_indices) * self.train_ratio)
+            train_indices.extend(label_indices[:n_train])
+            val_indices.extend(label_indices[n_train:])
+
+        train_indices = torch.tensor(train_indices, dtype=torch.long)
+        val_indices = torch.tensor(val_indices, dtype=torch.long)
+        return train_indices, val_indices            
+
+    def __len__(self):
+        return len(self.selected_data)
+
+    def __getitem__(self, idx):
+        sample = self.selected_data[idx]
+        label = self.selected_labels[idx]
+        
+        return sample, label
+
+class Old_Generalization(Dataset):
+    def __init__(self, args,flag,
+                 transform=None): # 1hz, 10hz, 15hz,IF
+        # Load data and labels 
+        self.flag = flag
+        self.source = args.source # 100,200,300,400,500
+        self.target = args.target # 100,200,300,400,500
 
 
         if self.flag == 'train':
@@ -434,5 +513,3 @@ if __name__ == '__main__':
     #     print("Data batch shape:", data.shape)
     #     print("Labels batch shape:", labels.shape)
     #     break  # 只展示第一个批次
-
-

@@ -160,10 +160,11 @@ class WaveFilters(SignalProcessingBase): # TII中的实现
         
     def filter_generator(self, in_channels, freq_length): 
         omega = torch.linspace(0, 0.5, freq_length, device=self.device).view(1, -1, 1)
-        
+        f_c = self.f_c.to(self.device)
+        f_b = torch.clamp(self.f_b, min=1e-3).to(self.device)
         self.omega = omega # .reshape(1, freq_length, 1).repeat([1, 1, in_channels])
-        
-        filters = torch.exp(-((self.omega - self.f_c) / (2 * self.f_b)) ** 2)
+
+        filters = torch.exp(-((omega - f_c) / (2 * f_b)) ** 2)
         return filters
 
     def forward(self, x): 
@@ -446,7 +447,7 @@ class Laplace_neural_operator(SignalProcessingBase):
         alpha = torch.fft.fft(x)
         lambda0=torch.fft.fftfreq(t.shape[0], dt)*2*np.pi*1j
         lambda1=lambda0.unsqueeze(-1).unsqueeze(-1).unsqueeze(-1)
-        lambda1=lambda1.cuda()
+        lambda1 = lambda1.to(alpha.device)
     
         # Obtain output poles and residues for transient part and steady-state part
         output_residue1,output_residue2= self.output_PR(lambda1, alpha, self.weights_pole, self.weights_residue)

@@ -1,20 +1,20 @@
 args:
 
   device: cuda
-  data_dir: 'E:/dataset/generate/SEU_bearing/'  
-  dataset_task: SEU_010_Basic
-  target: 'SEU_bearing_20Hz_2' # SEU_bearing_20Hz_2, SEU_bearing_30Hz_2
-  target_list: ['SEU_bearing_20Hz_2', 'SEU_bearing_30Hz_2']
+  data_dir: 'E:/dataset/generate/HUST_bearing_new/HUST_motor_4096/'
+  dataset_task: a_temp_HUST_motor_basic
+  target: 'HUST_5Hz_6' # HUST_bearing_20Hz, HUST_bearing_VS_0_40_0Hz
+
   k_shot: 64
 
 # model
   model: 'TFN_Morlet' # 'Resnet' 'WKN_m' 'Sinc_net_m' 'Huan_net' 'TFN_Morlet' 'MCN_GFK'
   skip_connection: true
-  num_classes: 5 # 5 for THU_018_basic 4 for THU_006_basic
+  num_classes: 6
   in_dim : 4096
   out_dim : 4096
-  in_channels : 2
-  out_channels : 3
+  in_channels : 4
+  out_channels : 3 
   scale : 4
 
   f_c_mu: 0
@@ -28,15 +28,15 @@ args:
   batch_size: 64
   num_epochs: 200
   weight_decay: 0.0001
-  num_workers: 4
-  seed: 17
+  num_workers: 2
+  seed: 18
 
 # train
   monitor: 'val_loss'
   patience: 100
   gpus: 1
   weight_decay: 0.0001
-  l1_norm: 0.0001
+  l1_norm: 0.001
 
   pruning: None # [0.7,0.5,0.01]
-  snr: 10
+  snr: 0

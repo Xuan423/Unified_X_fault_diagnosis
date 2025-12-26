@@ -3,10 +3,6 @@
 import torch
 import torch.nn as nn
 
-ONE = torch.Tensor([1]).cuda()
-ZERO = torch.Tensor([0]).cuda()
-
-
 # basic
 class LogicInferenceBase(nn.Module):
     def __init__(self, args):
@@ -29,15 +25,16 @@ class LogicInferenceBase(nn.Module):
 
     @staticmethod
     def implication(x, y):
-        return LogicInferenceBase.generalized_softmin(ONE, ONE - x + y)
+        one = torch.ones_like(x)
+        return LogicInferenceBase.generalized_softmin(one, one - x + y)
 
     @staticmethod
     def equivalence(x, y):
-        return ONE - torch.abs(x - y)
+        return 1 - torch.abs(x - y)
 
     @staticmethod
     def negation(x):
-        return ONE - x
+        return 1 - x
 
     @staticmethod
     def weak_conjunction(x, y):
@@ -49,11 +46,13 @@ class LogicInferenceBase(nn.Module):
 
     @staticmethod
     def strong_conjunction(x, y):
-        return LogicInferenceBase.generalized_softmax(ZERO, x + y - 1)
+        zero = torch.zeros_like(x)
+        return LogicInferenceBase.generalized_softmax(zero, x + y - 1)
 
     @staticmethod
     def strong_disjunction(x, y):
-        return LogicInferenceBase.generalized_softmin(ONE, x + y)
+        one = torch.ones_like(x)
+        return LogicInferenceBase.generalized_softmin(one, x + y)
     def test_forward(self):
         test_input = torch.randn(2, self.in_channels).to(self.device)
         output = self.forward(test_input)

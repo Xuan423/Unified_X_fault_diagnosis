@@ -5,7 +5,7 @@ from model.TSPN import Transparent_Signal_Processing_Network
 # from config import args
 # from config import signal_processing_modules,feature_extractor_modules
 from pytorch_lightning.callbacks import ModelCheckpoint
-from torch.optim import Adam
+from torch.optim import Adam, AdamW
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 import torchmetrics
 from .utils import l1_reg,get_all_layers,wgn2,sim_reg,mixup
@@ -38,10 +38,7 @@ class Basic_plmodel(pl.LightningModule):
     def training_step(self, batch, batch_idx):
         x, y = batch
         
-        if self.args.snr:
-            # print('add noise')
-            snr = np.random.randint(self.args.snr,0) if self.args.snr < 0 else np.random.randint(0,self.args.snr)
-            x = wgn2(x, snr)
+        x = self._apply_snr_if_enabled(x, phase="train")
             
         y_hat = self(x)
         loss = self.loss(y_hat, y.long())
@@ -82,6 +79,105 @@ class Basic_plmodel(pl.LightningModule):
         
         return loss
 
+    def _apply_snr_if_enabled(self, x, phase: str):
+        """
+        Apply additive noise for the given phase.
+
+        By default, noise is applied only in training. You can control behavior via:
+        - args.snr_apply: 'train' (default) | 'train_val' | 'all'
+        - args.snr_eval: bool (if True, apply in val/test as well)
+        - args.snr_mode: 'per_sample' | 'per_batch' | 'per_sample_channel' (default auto-select for multi-channel inputs)
+        - args.snr_train / args.snr_eval_db: override SNR (dB) for train vs eval phases
+        """
+        # Allow using different SNR for train vs eval if configured
+        snr_value = None
+        if phase == "train" and hasattr(self.args, "snr_train"):
+            snr_value = getattr(self.args, "snr_train")
+        elif phase in ("val", "validation", "test") and hasattr(self.args, "snr_eval_db"):
+            snr_value = getattr(self.args, "snr_eval_db")
+
+        snr_db = self._sample_snr_db(snr_value=snr_value)
+        if snr_db is None:
+            return x
+
+        snr_eval = bool(getattr(self.args, "snr_eval", False))
+        snr_apply = getattr(self.args, "snr_apply", None)
+        if snr_apply is None:
+            # Backward compatible behavior:
+            # - default: apply noise only in training
+            # - if snr_eval=True: apply in train/val/test
+            snr_apply = "all" if snr_eval else "train"
+
+        snr_apply = str(snr_apply).lower()
+        phase = str(phase).lower()
+
+        apply = False
+        if snr_apply in ("none", "off", "false", "0"):
+            apply = False
+        elif snr_apply == "train":
+            apply = phase == "train"
+        elif snr_apply in ("val", "validation"):
+            apply = phase in ("val", "validation")
+        elif snr_apply == "test":
+            apply = phase == "test"
+        elif snr_apply in ("eval", "val_test"):
+            apply = phase in ("val", "validation", "test")
+        elif snr_apply == "train_val":
+            apply = phase in ("train", "val", "validation")
+        elif snr_apply == "train_test":
+            apply = phase in ("train", "test")
+        elif snr_apply in ("all", "train_val_test"):
+            apply = True
+        else:
+            # Unknown value -> fallback to legacy behavior
+            apply = True if snr_eval else (phase == "train")
+
+        if not apply:
+            return x
+
+        snr_mode = getattr(self.args, "snr_mode", None)
+        if snr_mode is None:
+            # Default to per-sample-per-channel for multi-channel inputs [B, L, C],
+            # which avoids channel energy imbalance causing unintended SNR.
+            if x.ndim == 3 and x.shape[-1] > 1:
+                snr_mode = "per_sample_channel"
+            else:
+                snr_mode = "per_sample"
+
+        return wgn2(x, snr_db, mode=snr_mode)
+
+    def _sample_snr_db(self, snr_value=None):
+        """
+        Return SNR in dB (float) or None if disabled.
+
+        Supported formats:
+        - snr: 10            -> fixed 10 dB
+        - snr: [0, 10]       -> uniform int in [0, 10]
+        - snr: [0.0, 10.0]   -> uniform float in [0.0, 10.0]
+
+        Note: old behavior (random in [0, snr)) is removed because configs
+        annotate snr as a fixed noise level (e.g. "10dB, 0dB").
+        """
+        if snr_value is None and not hasattr(self.args, "snr"):
+            return None
+
+        snr = self.args.snr if snr_value is None else snr_value
+        if snr is None or snr is False:
+            return None
+        if isinstance(snr, (int, float)) and snr == 0:
+            return None
+
+        if isinstance(snr, (list, tuple)) and len(snr) == 2:
+            low, high = snr[0], snr[1]
+            if isinstance(low, float) or isinstance(high, float):
+                return float(np.random.uniform(low, high))
+            low_i, high_i = int(low), int(high)
+            if low_i > high_i:
+                low_i, high_i = high_i, low_i
+            return float(np.random.randint(low_i, high_i + 1))
+
+        return float(snr)
+
     def update_regularization_loss(self):
         regularization_loss = 0
         for i, (name,param) in enumerate(self.network.named_parameters()):
@@ -120,6 +216,7 @@ class Basic_plmodel(pl.LightningModule):
     def validation_step(self, batch, batch_idx):
         # self.eval()
         x, y = batch
+        x = self._apply_snr_if_enabled(x, phase="val")
         y_hat = self(x)
         val_loss = self.loss(y_hat, y.long())
         acc = self.acc_val(y_hat, y.long())
@@ -128,6 +225,7 @@ class Basic_plmodel(pl.LightningModule):
         # return val_loss
     def test_step(self, batch, batch_idx):
         x, y = batch
+        x = self._apply_snr_if_enabled(x, phase="test")
         y_hat = self(x)
         test_loss = self.loss(y_hat, y.long())
         self.log('test_loss', test_loss,  on_epoch=True, prog_bar=True, logger=True,sync_dist=True)
@@ -149,6 +247,14 @@ class Basic_plmodel(pl.LightningModule):
             },
         }
         return out
+
+    def _get_optimizer_cls(self):
+        opt_name = getattr(self.args, "optimizer", "adam")
+        opt_name = str(opt_name).lower()
+        if opt_name == "adamw":
+            return AdamW
+        return Adam
+
     def config_different_lr_optimizer(self):
         '''config different learning rate for different layers'''
         
@@ -170,7 +276,8 @@ class Basic_plmodel(pl.LightningModule):
         # 确保网络中未被上述步骤指定的其它所有参数都有一个默认的学习率
         base_params = filter(lambda p: id(p) not in [id(param['params']) for param in parameters_conv], self.network.parameters())
 
-        optimizer = Adam([
+        optimizer_cls = self._get_optimizer_cls()
+        optimizer = optimizer_cls([
             {'params': base_params},
             *parameters_conv
         ], lr=self.args.learnable_parameter_learning_rate, weight_decay=self.args.weight_decay)

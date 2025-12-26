@@ -26,6 +26,8 @@ from model_collection.MWA_CNN import A_cSE,Huan_net
 from model_collection.TFN.Models.TFN import TFN_Morlet
 from model_collection.MCN.models import MCN_GFK, MultiChannel_MCN_GFK
 from model_collection.MCN.models import MCN_WFK,MultiChannel_MCN_WFK
+from model_collection.Convformer_NSE import convoformer_v1_small
+from model_collection.bsstn_flex import BSSTNFlex
 import pandas as pd
 import multiprocessing
 torch.set_float32_matmul_precision('medium')
@@ -35,8 +37,8 @@ if __name__ == '__main__':
     iteration = 1
     parser = argparse.ArgumentParser(description='comparison model')
     # 添加参数
-    parser.add_argument('--config_dir', type=str, default='configs/a_010_SEU/config_MCN_basic.yaml',help='The directory of the configuration file')
-    
+    parser.add_argument('--config_dir', type=str, default='configs/a_010_SEU/config_TFN_basic.yaml',help='The directory of the configuration file')
+
     # parser.add_argument('--config_dir', type=str, default='configs/a_010_SEU/config_MCN_basic.yaml',
     #                     help='The directory of the configuration file')
     meta_args = parser.parse_args()
@@ -57,6 +59,8 @@ if __name__ == '__main__':
             'Huan_net': lambda args: Huan_net(input_size=args.in_channels, num_class=args.num_classes),
             'TFN_Morlet': lambda args: TFN_Morlet(in_channels=args.in_channels, out_channels=args.num_classes),
             'MCN_GFK': lambda args: MultiChannel_MCN_GFK(ff=ff, in_channels=args.in_channels, num_MFKs=8, num_classes=args.num_classes),
+            'Convoformer_NSE': lambda args: convoformer_v1_small(in_channel=args.in_channels, out_channel=args.num_classes),
+            'BSSTN_Flex': lambda args: BSSTNFlex(num_classes=args.num_classes, max_sensors=args.in_channels),
         }
 
         # 初始化模型

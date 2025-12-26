@@ -18,7 +18,9 @@ DATASET_TASK_CLASS = {
     'a_017_Ottawa_generalization': Default_generalization,
     'a_031_HUST_generalization': Default_generalization,
     'a_temp_SUDA_basic': Default_dataset,
-    'a_temp_SUDA_generalization': Default_generalization
+    'a_temp_SUDA_generalization': Old_Generalization,
+    'a_temp_HUST_motor_basic': Default_dataset,
+    'a_temp_HUST_motor_generalization': Default_generalization
 }
 
 def get_data(args):
@@ -31,7 +33,7 @@ def get_data(args):
         shuffle = True,
         num_workers = args.num_workers,
         pin_memory=True,
-        persistent_workers=True
+        persistent_workers=args.num_workers > 0
     )
     dataset = dataset_class(args,flag = 'val')
     val_loader = DataLoader(
@@ -40,7 +42,7 @@ def get_data(args):
         shuffle = False,
         num_workers = args.num_workers,
         pin_memory=True,
-        persistent_workers=True
+        persistent_workers=args.num_workers > 0
     )
     dataset = dataset_class(args,flag = 'test')
     test_loader = DataLoader(
@@ -49,6 +51,6 @@ def get_data(args):
         shuffle = False,
         num_workers = args.num_workers,
         pin_memory=True,
-        persistent_workers=True
+        persistent_workers=args.num_workers > 0
     )     
     return train_loader,val_loader,test_loader

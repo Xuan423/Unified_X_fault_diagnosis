@@ -16,5 +16,10 @@
 # # suda mcn
 # python E:/PHM_bench/Unified_X_fault_diagnosis/main_com.py --config_dir E:/PHM_bench/Unified_X_fault_diagnosis/configs/a_temp_SUDA_electric/config_MCN_basic.yaml
 # suda gen
-python E:/PHM_bench/Unified_X_fault_diagnosis/main.py --config_dir E:/PHM_bench/Unified_X_fault_diagnosis/configs/a_temp_SUDA_electric/gen/config_onlyI.yaml
-python E:/PHM_bench/Unified_X_fault_diagnosis/main.py --config_dir E:/PHM_bench/Unified_X_fault_diagnosis/configs/a_temp_SUDA_electric/gen/config_onlyentropy.yaml
+# python E:/PHM_bench/Unified_X_fault_diagnosis/main.py --config_dir E:/PHM_bench/Unified_X_fault_diagnosis/configs/a_temp_SUDA_electric/gen/config_onlyI.yaml
+# python E:/PHM_bench/Unified_X_fault_diagnosis/main.py --config_dir E:/PHM_bench/Unified_X_fault_diagnosis/configs/a_temp_SUDA_electric/gen/config_onlyentropy.yaml
+
+# 12.26 revision
+# new_dataset: hust_motor
+# basic
+python E:/PHM_bench/Unified_X_fault_diagnosis/main.py --config_dir E:/PHM_bench/Unified_X_fault_diagnosis/configs/a_temp_HUST_motor/config_basic.yaml

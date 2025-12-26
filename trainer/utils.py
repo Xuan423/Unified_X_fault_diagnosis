@@ -14,19 +14,45 @@ def random_shuffle_channels(tensor):
     C = tensor.size(1)
     
     # 生成随机的C通道索引
-    perm = torch.randperm(C)
+    perm = torch.randperm(C, device=tensor.device)
     
     # 打乱C通道
     shuffled_tensor = tensor[:, perm]
 
     return shuffled_tensor
 
-def wgn2(x, snr):
-    "加随机噪声"
-    snr = 10**(snr/10.0)
-    xpower = torch.sum(x**2)/(x.size(0)*x.size(1)*x.size(2))
-    npower = xpower / snr
-    return torch.randn(x.size()).cuda() * torch.sqrt(npower) + x 
+def wgn2(x, snr_db, mode: str = "per_sample", eps: float = 1e-12):
+    """
+    Add white Gaussian noise with a target SNR (dB).
+
+    Notes:
+    - Input x is expected to be [B, L, C] in this project, but this function supports any shape.
+    - Default uses per-sample power to avoid batch composition affecting noise level.
+
+    Args:
+        x: input tensor
+        snr_db: SNR in dB (float/int)
+        mode:
+          - "per_sample": compute power per sample (reduce all dims except batch)
+          - "per_batch": compute power over the whole batch (single scalar)
+          - "per_sample_channel": for 3D [B, L, C], compute power per sample per channel (reduce L only)
+        eps: numerical stability
+    """
+    snr_linear = 10 ** (float(snr_db) / 10.0)
+
+    if mode == "per_batch":
+        xpower = x.pow(2).mean()
+    elif mode == "per_sample_channel" and x.ndim == 3:
+        # [B, L, C] -> [B, 1, C]
+        xpower = x.pow(2).mean(dim=1, keepdim=True)
+    else:
+        # per_sample (default): reduce all dims except batch -> [B, 1, 1, ...]
+        reduce_dims = tuple(range(1, x.ndim))
+        xpower = x.pow(2).mean(dim=reduce_dims, keepdim=True)
+
+    npower = xpower / snr_linear
+    noise = torch.randn_like(x) * torch.sqrt(npower + eps)
+    return x + noise
 
 def l1_reg(param):
     return torch.sum(torch.abs(param))
@@ -41,7 +67,7 @@ def mixup(batch,alpha = 0.8):
     # mix_ratio = np.random.dirichlet(np.ones(3) * 0.9,size=1) # 设置为0.9
     lamda = np.random.beta(alpha,alpha)
     x,y = batch
-    index = torch.randperm(x.size(0)).cuda()
+    index = torch.randperm(x.size(0), device=x.device)
     
     x = lamda * x + (1-lamda) * x[index]
     y = lamda * y + (1-lamda) * y[index]

@@ -1,6 +1,5 @@
 from ast import arg
 # from os import pread
-from altair import AllSortString
 import torch
 from torch import nn
 from collections import OrderedDict
@@ -8,6 +7,7 @@ import yaml
 from types import SimpleNamespace
 import os 
 import time 
+import re
 
 # from model.Signal_processing import SignalProcessingBase,\
 #         SignalProcessingModuleDict,\
@@ -106,6 +106,18 @@ def parse_arguments(config_dir,it):
     with open(yaml_dir, 'r') as f:
         config = yaml.safe_load(f)
     args = SimpleNamespace(**config['args'])
+
+    # WSL/Linux兼容：将 Windows 盘符路径(如 E:/xxx 或 E:\\xxx)映射到 /mnt/e/xxx
+    if hasattr(args, "data_dir") and isinstance(args.data_dir, str):
+        args.data_dir = _maybe_map_windows_drive_path(args.data_dir)
+
+    # WSL/CPU环境兼容：当配置写了cuda但实际不可用时，自动回退到cpu
+    if hasattr(args, "device") and isinstance(args.device, str):
+        device_lower = args.device.lower()
+        if device_lower in ("cuda", "gpu") and not torch.cuda.is_available():
+            args.device = "cpu"
+            if hasattr(args, "gpus"):
+                args.gpus = 1
     
     
     # dataset = args.data_dir[-3:].replace('/','')
@@ -120,6 +132,40 @@ def parse_arguments(config_dir,it):
         os.makedirs(path)
     args.path = path
     return config,args,path,name
+
+
+def _maybe_map_windows_drive_path(path: str) -> str:
+    """
+    在非Windows系统上，将形如 'E:/dataset/...' 或 'E:\\dataset\\...' 的路径
+    尝试映射为 '/mnt/e/dataset/...'（仅当映射路径存在时才替换）。
+    """
+    if os.name == "nt":
+        return path
+
+    if not path:
+        return path
+
+    # 已经是Linux路径 /mnt/* 则不处理
+    if path.startswith("/mnt/"):
+        return path
+
+    # 如果原路径本身存在，也不处理（比如用户自己挂载了同名目录）
+    if os.path.exists(path):
+        return path
+
+    match = re.match(r"^([A-Za-z]):[\\\\/](.*)$", path)
+    if not match:
+        return path
+
+    drive = match.group(1).lower()
+    rest = match.group(2).replace("\\", "/")
+    mapped = f"/mnt/{drive}/{rest}"
+
+    # 保持末尾的 / 语义（主要用于拼接文件名）
+    if path.endswith(("/", "\\")) and not mapped.endswith("/"):
+        mapped += "/"
+
+    return mapped if os.path.exists(mapped) else path
 #### 暂时无用，和parse功能一样 ################
 def yaml_arguments(yaml_dir): # 暂时无用
     # 读取YAML文件
