@@ -201,8 +201,12 @@ plot.zip
 *.csv
 *.ai
 *.npy
+!data/demo_tspn/
+!data/demo_tspn/SUDA_electric_0kg_2500r_1000Hz_data.npy
+!data/demo_tspn/SUDA_electric_0kg_2500r_1000Hz_label.npy
+docs/
+reports/demo_tspn_analysis_report.md
 *.svg
-./post
 
 /1_paperfig
 

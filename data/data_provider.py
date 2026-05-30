@@ -1,58 +1,47 @@
 from torch.utils.data import DataLoader
-from data.datasets import *
-from .utils import AddNoiseTransform
+
+from data.datasets import Default_dataset
+
 
 DATASET_TASK_CLASS = {
-    'THU_006_basic': Default_dataset,
-    'THU_018_basic': Default_dataset,
-    'THU_018_few_shot': THU_006or018_few_shot,
-    'THU_006_few_shot': THU_006or018_few_shot,
-    'THU_006_generalization': THU_006_generalization,
-    'DIRG_020_basic': Default_dataset,
-    'DIRG_020_generalization': Default_generalization,
-    'HUST_031_Basic': Default_dataset,
-    'SEU_010_Basic': Default_dataset,
-    'a_027_PU': Default_dataset,
-    'a_027_PU_generalization': Default_generalization,
-    'a_017_Ottawa': Default_dataset,
-    'a_017_Ottawa_generalization': Default_generalization,
-    'a_031_HUST_generalization': Default_generalization,
-    'a_temp_SUDA_basic': Default_dataset,
-    'a_temp_SUDA_generalization': Old_Generalization,
-    'a_temp_HUST_motor_basic': Default_dataset,
-    'a_temp_HUST_motor_generalization': Default_generalization,
-    'b_pu_generalization': Default_generalization,
-    'b_bjut_generalization': Default_generalization
+    "TSPN_SUDA_DEMO": Default_dataset,
 }
+
 
 def get_data(args):
     dataset_class = DATASET_TASK_CLASS[args.dataset_task]
-    
-    dataset = dataset_class(args,flag = 'train')
+    pin_memory = bool(getattr(args, "pin_memory", False))
+    num_workers = int(getattr(args, "num_workers", 0))
+
+    train_dataset = dataset_class(args, flag="train")
+    val_dataset = dataset_class(args, flag="val")
+    test_dataset = dataset_class(args, flag="test")
+
     train_loader = DataLoader(
-        dataset = dataset,
-        batch_size= args.batch_size,
-        shuffle = True,
-        num_workers = args.num_workers,
-        pin_memory=True,
-        persistent_workers=args.num_workers > 0
+        dataset=train_dataset,
+        batch_size=args.batch_size,
+        shuffle=True,
+        num_workers=num_workers,
+        pin_memory=pin_memory,
+        drop_last=False,
+        persistent_workers=num_workers > 0,
     )
-    dataset = dataset_class(args,flag = 'val')
     val_loader = DataLoader(
-        dataset = dataset,
-        batch_size= args.batch_size,
-        shuffle = False,
-        num_workers = args.num_workers,
-        pin_memory=True,
-        persistent_workers=args.num_workers > 0
+        dataset=val_dataset,
+        batch_size=args.batch_size,
+        shuffle=False,
+        num_workers=num_workers,
+        pin_memory=pin_memory,
+        drop_last=False,
+        persistent_workers=num_workers > 0,
     )
-    dataset = dataset_class(args,flag = 'test')
     test_loader = DataLoader(
-        dataset = dataset,
-        batch_size= args.batch_size,
-        shuffle = False,
-        num_workers = args.num_workers,
-        pin_memory=True,
-        persistent_workers=args.num_workers > 0
-    )     
-    return train_loader,val_loader,test_loader
+        dataset=test_dataset,
+        batch_size=args.batch_size,
+        shuffle=False,
+        num_workers=num_workers,
+        pin_memory=pin_memory,
+        drop_last=False,
+        persistent_workers=num_workers > 0,
+    )
+    return train_loader, val_loader, test_loader

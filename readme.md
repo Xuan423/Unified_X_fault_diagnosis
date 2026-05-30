@@ -1,250 +1,137 @@
-# 仓库介绍
+# TSPN Demo
 
-本仓库提供了一种通用的、可解释的故障诊断方法框架，基于该框架可以实现以下模型：
+## Overview
 
-- TON
-- TIFN
-- DEN
-- EOAN
-- EQL
-- MCN
-- WKN
-- EELM
-- F_EQL
+This repository is a minimal TSPN-only demo for transparent signal processing fault diagnosis. It keeps one training path, one real SUDA `.npy` asset pair, and one post-training analysis command.
 
-# 快速开始
+The default command trains TSPN for 20 epochs on CPU with PyTorch Lightning and writes a benchmark-style timestamped run directory.
 
-## 环境配置
+## Environment
 
-请按照以下命令创建并激活 Conda 环境：
+Create the minimal CPU environment:
 
-```shell
+```bash
 conda env create -f environment.yml
-conda activate your_environment_name  # 将 'your_environment_name' 替换为实际的环境名称
+conda activate UXFD
 ```
 
-## 配置文件
+The validation environment used during development was:
 
-在运行前，需要根据需求配置模型参数。配置文件位于：
-
-```
-Unified_X_fault_diagnosis/configs/THU_018/config_TSPN.yaml
+```bash
+/home/xuanli/miniforge/envs/phmbench/bin/python
 ```
 
-以下是配置文件中主要参数的说明：
+The default environment intentionally excludes SwanLab, W&B, TensorBoard, Gradio, CUDA-specific packages, and comparison-model dependencies.
 
-| 参数                          | 描述                                     | 示例值                                                           |
-|-------------------------------|------------------------------------------|------------------------------------------------------------------|
-| **signal_processing_configs** | 信号处理层的配置                         |                                                                  |
-| layer1                        | 第一层信号处理模块                       | ['HT', 'WF', 'I']                                                |
-| layer2                        | 第二层信号处理模块                       | ['HT', 'WF', 'I']                                                |
-| layer3                        | 第三层信号处理模块                       | ['HT', 'WF', 'I']                                                |
-| layer4                        | 第四层信号处理模块                       | ['HT', 'WF', 'I']                                                |
-| **feature_extractor_configs** | 特征提取模块的配置                       | ['Mean', 'Std', 'Var', 'Entropy', 'Max', 'Min', 'AbsMean', ... ] |
-| **args**                      | 其他参数配置                             |                                                                  |
-| device                        | 运行设备                                 | 'cuda'                                                           |
-| data_dir                      | 数据集路径                               | '/home/user/data/a_bearing/a_018_THU24_pro/'                     |
-| dataset_task                  | 数据集任务名称                           | 'THU_018_basic'                                                  |
-| target                        | 目标类型，数据集中的参数，设置目标域       | 'IF'                                                             |
-| k_shot                        | 少样本学习中的样本数量                   | 64                                                               |
-| **model**                     | 模型参数配置                             |                                                                  |
-| model                         | 模型名称                                 | 'TSPN'                                                           |
-| skip_connection               | 是否使用残差连接                         | true                                                             |
-| num_classes                   | 分类数                                   | 5                                                                |
-| in_dim                        | 输入维度                                 | 4096                                                             |
-| out_dim                       | 输出维度                                 | 4096                                                             |
-| in_channels                   | 输入通道数                               | 2                                                                |
-| out_channels                  | 输出通道数                               | 3                                                                |
-| scale                         | 缩放比例                                 | 4                                                                |
-| f_c_mu                        | 滤波器中心频率初始化均值                         | 0                                                                |
-| f_c_sigma                     | 滤波器中心频率初始化标准差                       | 0.1                                                              |
-| f_b_mu                        | 偏置初始化均值                           | 0                                                                |
-| f_b_sigma                     | 偏置初始化标准差                         | 0.1                                                              |
-| **hyperparameter**            | 超参数设置                               |                                                                  |
-| learning_rate                 | 学习率                                   | 0.001                                                            |
-| batch_size                    | 批量大小                                 | 64                                                               |
-| num_epochs                    | 训练轮数                                 | 300                                                              |
-| weight_decay                  | 权重衰减系数                             | 0.0001                                                           |
-| num_workers                   | 数据加载器的工作线程数                   | 32                                                               |
-| seed                          | 随机种子                                 | 17                                                               |
-| **train**                     | 训练参数配置                             |                                                                  |
-| monitor                       | 监控指标                                 | 'val_loss'                                                       |
-| patience                      | 提前停止的等待次数                       | 200                                                              |
-| gpus                          | 使用的 GPU 数目                          | 1                                                                |
-| l1_norm                       | L1 正则化系数                            | 0.01                                                             |
-| pruning                       | 剪枝比例（可为 None）                    | None                                                             |
-| snr                           | 信噪比                                   | 1                                                                |
+## Data
 
-## 运行示例
+The demo uses real SUDA assets committed under `data/demo_tspn/`:
 
-请使用以下命令运行模型：
+- `SUDA_electric_0kg_2500r_1000Hz_data.npy`
+- `SUDA_electric_0kg_2500r_1000Hz_label.npy`
 
-```shell
-python main.py --config_file configs/THU_018/config_TSPN.yaml
+Expected raw shapes:
+
+- data: `(204, 1024, 5)`, raw dtype `float64`, converted to `float32` at load time
+- label: `(204,)`, raw dtype `int32`, converted to `int64` at load time
+
+The dataset split is deterministic by label order:
+
+- train: 60%
+- validation: 10%
+- test: 30%
+
+## Train
+
+Default run:
+
+```bash
+python main.py
 ```
 
-或者执行脚本：
+Explicit equivalent:
 
-```shell
-./script/demo.sh
+```bash
+python main.py \
+  --config configs/tspn_suda_demo.yaml \
+  --device cpu \
+  --epochs 20 \
+  --batch-size 32 \
+  --patience 20
 ```
 
-# 数据集任务映射
+The default config uses:
 
-`DATASET_TASK_CLASS` 字典定义了数据集任务名称与对应的数据集类之间的映射关系：
+- model: `TSPN`
+- signal layers: four layers of `HT/WF/I`
+- features: 13 statistical feature extractors
+- batch size: `32`
+- epochs: `20`
+- early stopping patience: `20`
+- data workers: `0`
+- pin memory: `false`
+- logger: Lightning `CSVLogger`
 
-```python
-DATASET_TASK_CLASS = {
-    'THU_006_basic': THU_006or018_basic,
-    'THU_018_basic': THU_006or018_basic,
-    'THU_018_few_shot': THU_006or018_few_shot,
-    'THU_006_few_shot': THU_006or018_few_shot,
-    'THU_006_generalization': THU_006_generalization
-}
+## Outputs
+
+Training writes to:
+
+```text
+save/task_TSPN_SUDA_DEMO/model_TSPN/model_TSPNtime.../
 ```
 
-# 项目目录结构
+Each valid run contains:
 
-```
-├── .gitattributes
-├── .gitignore
-├── .vscode
-│   ├── launch.json
-│   └── settings.json
-├── 1_paperfig
-│   ├── figs/
-│   └── TIIfigure/
-├── configs
-│   ├── config.py                # 项目的配置文件解析
-│   ├── config_basic.yaml
-│   ├── config_com.yaml          # 对比方法的配置
-│   ├── THU_006/                 # 根据不同数据集的配置文件
-│   ├── THU_018/
-│   └── ...                      # 更多配置文件
-├── data
-│   ├── data_provider.py
-│   ├── datasets.py
-│   └── utils.py
-├── main.py                      # 主程序入口
-├── main_ablation_exp.py         # 消融实验，网格学习率
-├── main_com.py                  # 对比方法
-├── main_com_kshotexp.py         # K-shot 对比方法
-├── main_kshotexp.py             # K-shot 实验
-├── model                        # 自建模型目录
-│   ├── Feature_extract.py
-│   ├── Logic_inference.py
-│   ├── parse_network.py         # 网络解析和可视化工具
-│   ├── Signal_processing.py
-│   ├── DEN.py                   # 改进的算子模型
-│   ├── TSPN.py                  # TIFN 工作，多源信息融合
-│   ├── NNSPN.py                 # EOAN 工作，加入 Attention
-│   └── utils.py
-├── model_collection             # 模型集合
-│   ├── EELM.py                  # 王冬工作
-│   ├── F_EQL.py                 # EQL 工作
-│   ├── MCN.py                   # MCN 工作 
-│   ├── MWA_CNN.py
-│   ├── Resnet.py
-│   ├── Sincnet.py
-│   ├── TFN.py
-│   └── WKN.py
-├── plot                         # 绘图文件夹
-├── post                         # 后处理、结果分析
-├── post_analysis.ipynb
-├── readme.md
-├── save                         # 保存的模型和结果
-├── script                       # 运行脚本
-├── test
-├── trainer
-│   ├── trainer_basic.py         # 训练、验证、测试的基本循环
-│   ├── trainer_set.py           # 训练配置，包括日志、检查点、剪枝等
-│   └── utils.py                 # 辅助工具，如损失函数和回调类
-├── utils
-└── wandb
+- `logs/version_*/metrics.csv`
+- best checkpoint
+- `last.ckpt`
+- `test_result.csv`
+
+`save/` is ignored by git because it is generated output.
+
+## Analysis
+
+Run analysis after training:
+
+```bash
+python post/demo_tspn_analysis.py
 ```
 
-# 信号处理模块
+By default, the script chooses the latest valid run under `save/task_TSPN_SUDA_DEMO/model_TSPN/`. You can also pass a run explicitly:
 
-1. **FFT**：快速傅里叶变换。
+```bash
+python post/demo_tspn_analysis.py --run-dir save/task_TSPN_SUDA_DEMO/model_TSPN/<run_dir>
+```
 
-   $$X(k) = \sum_{n=0}^{N-1} x(n)e^{-j2\pi kn/N}$$
+Analysis writes:
 
-2. **小波变换**：小波变换。
+- `reports/demo_tspn_analysis_report.md`
+- `reports/demo_tspn_figures/loss_curve.png`
+- `reports/demo_tspn_figures/confusion_matrix.png`
+- `reports/demo_tspn_figures/filter_summary.png`
+- `reports/demo_tspn_figures/feature_summary.png`
+- `reports/demo_tspn_figures/prediction_summary.csv`
 
-   $$W(a,b) = \frac{1}{\sqrt{|a|}}\int_{-\infty}^{+\infty} x(t)\psi\left(\frac{t-b}{a}\right)dt$$
+The report includes run summary, data summary, training metrics, test result, signal-processing weights, feature summary, prediction summary, and generated artifacts.
 
-3. **希尔伯特变换**：希尔伯特变换。
+## Project Structure
 
-   $$H(x(t)) = \frac{1}{\pi} \mathrm{P} \int_{-\infty}^{+\infty} \frac{x(\tau)}{t-\tau} d\tau$$
+```text
+configs/config.py                         # TSPN demo YAML builder
+configs/tspn_suda_demo.yaml               # Default demo config
+data/                                     # Minimal demo dataset and loaders
+data/demo_tspn/                           # Real SUDA demo .npy assets
+model/                                    # TSPN, signal operators, feature extractors
+trainer/                                  # Lightning module, trainer setup, utilities
+post/demo_tspn_analysis.py                # Scripted post-training analysis
+post/plot_tspn_radar.py                   # Compatibility visual-analysis CLI
+post/notebooks/                           # Demo-compatible notebook launchers
+reports/                                  # Demo analysis report; figures are generated
+script/demo.sh                            # Train plus analysis convenience command
+```
 
-4. **小波滤波**：小波滤波。
+## Scope
 
-   $$y(t) = \sum_{n=0}^{N-1} h(n)x(t-n)$$
+This demo does not preserve the old multi-model benchmark harness. Comparison models, generated benchmark configs, non-TSPN scripts, external logger setup, and historical reports were removed. Local planning and cleanup notes live under ignored `docs/`.
 
-# 特征提取模块
-
-1. **MeanFeature**：均值计算。
-
-   $$\mu = \frac{1}{N}\sum_{i=1}^{N} x_i$$
-
-2. **StdFeature**：标准差计算。
-
-   $$\sigma = \sqrt{\frac{1}{N}\sum_{i=1}^{N} (x_i - \mu)^2}$$
-
-3. **VarFeature**：方差计算。
-
-   $$\sigma^2 = \frac{1}{N}\sum_{i=1}^{N} (x_i - \mu)^2$$
-
-4. **EntropyFeature**：熵计算。
-
-   $$H(x) = -\sum_{i=1}^{N} p(x_i) \log p(x_i)$$
-
-5. **MaxFeature**：最大值计算。
-
-   $$\max(x) = \max_{i} x_i$$
-
-6. **MinFeature**：最小值计算。
-
-   $$\min(x) = \min_{i} x_i$$
-
-7. **AbsMeanFeature**：绝对值均值计算。
-
-   $$\text{abs\_mean}(x) = \frac{1}{N}\sum_{i=1}^{N} |x_i|$$
-
-8. **KurtosisFeature**：峰度计算。
-
-   $$\text{kurtosis}(x) = \frac{\frac{1}{N}\sum_{i=1}^{N} (x_i - \mu)^4}{\sigma^4}$$
-
-9. **RMSFeature**：均方根值计算。
-
-   $$\text{rms}(x) = \sqrt{\frac{1}{N}\sum_{i=1}^{N} x_i^2}$$
-
-10. **CrestFactorFeature**：峰值因子计算。
-
-    $$\text{crest\_factor}(x) = \frac{\max_{i} x_i}{\text{rms}(x)}$$
-
-11. **ClearanceFactorFeature**：间隙因子计算。
-
-    $$\text{clearance\_factor}(x) = \frac{\max_{i} x_i}{\text{abs\_mean}(x)}$$
-
-12. **SkewnessFeature**：偏度计算。
-
-    $$\text{skewness}(x) = \frac{\frac{1}{N}\sum_{i=1}^{N} (x_i - \mu)^3}{\sigma^3}$$
-
-13. **ShapeFactorFeature**：形状因子计算。
-
-    $$\text{shape\_factor}(x) = \frac{\text{rms}(x)}{\text{abs\_mean}(x)}$$
-
-14. **CrestFactorDeltaFeature**：峰值因子差分值计算。
-
-    $$\text{crest\_factor\_delta}(x) = \frac{\sqrt{\frac{1}{N}\sum_{i=1}^{N} (x_{i+1} - x_i)^2}}{\text{abs\_mean}(x)}$$
-
-# 逻辑推理模块
-
-TODO
-
-
-# 模型规约
-
-1. 1D 模型
-2. 2D 时频模型
+Accuracy is reported but no accuracy threshold is required for pass/fail. The acceptance gate is that training and analysis complete with finite loss and metrics on the bundled real SUDA data.

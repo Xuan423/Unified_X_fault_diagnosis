@@ -1,115 +1,108 @@
-
-
-############# config##########
 import argparse
-from model.TSPN import Transparent_Signal_Processing_Network 
-from model.TSPN_KAN import Transparent_Signal_Processing_KAN
-from model.NNSPN import NN_Signal_Processing_Network
-from model.TFON import Time_Frequency_Operator_Network
+import os
+from pathlib import Path
+
+import pandas as pd
+import torch
+from pytorch_lightning import seed_everything
+
+from configs.config import config_network, parse_arguments
+from model.TSPN import Transparent_Signal_Processing_Network
 from trainer.trainer_basic import Basic_plmodel
 from trainer.trainer_set import trainer_set
 from trainer.utils import load_best_model_checkpoint
 
-import torch
-from pytorch_lightning import seed_everything
-from configs.config import parse_arguments,config_network
-import os
-import pandas as pd
-import multiprocessing
-import re
-# import swanlab as wandb
 
-# os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
-torch.set_float32_matmul_precision('medium')
-if __name__ == '__main__':
-    # multiprocessing.freeze_support()
-    iteration = 1
-    # 创建解析器
-    parser = argparse.ArgumentParser(description='TSPN')
-
-    # 添加参数
-    # parser.add_argument('--config_dir', type=str, default='configs/a_temp_SUDA_electric/config_basic.yaml',
-    #                     help='The directory of the configuration file')
-    parser.add_argument('--config_dir', type=str, default='configs/a_010_SEU/config_basic.yaml',
-                        help='The directory of the configuration file')
-    parser.add_argument('--notes', type=str, default='')
-
-    meta_args = parser.parse_args()
-    config_dir = meta_args.config_dir
-    def _format_run_tag(target):
-        if target is None:
-            return "target_unknown"
-        if isinstance(target, list):
-            tag = "+".join(str(item) for item in target)
-        else:
-            tag = str(target)
-        return "target" + re.sub(r"[\\/: ]+", "_", tag)
-
-    def _iter_targets(args):
-        target_list = getattr(args, "target_list", None)
-        if target_list:
-            source_list = getattr(args, "source_list", None)
-            if source_list:
-                if len(source_list) != len(target_list):
-                    raise ValueError("source_list length must match target_list length.")
-                for source, target in zip(source_list, target_list):
-                    yield target, source
-            else:
-                for target in target_list:
-                    yield target, getattr(args, "source", None)
-        else:
-            yield getattr(args, "target", None), getattr(args, "source", None)
-
-    for it in range(iteration):
-        _, base_args, _, _ = parse_arguments(
-            config_dir,
-            it,
-            create_path=False,
-            verbose=False,
-        )
-        for target, source in _iter_targets(base_args):
-            run_tag = _format_run_tag(target)
-            configs, args, path, name = parse_arguments(
-                config_dir,
-                it,
-                run_tag=run_tag,
-                target_override=target,
-                source_override=source,
-            )
-            seed_everything(args.seed + it) # 17 args.seed
-            # wandb.init(project=args.dataset_task, name=name,notes=meta_args.notes)
-
-            # 初始化模型
-            signal_processing_modules, feature_extractor_modules = config_network(configs,args)
-
-            MODEL_DICT = {
-                'TSPN': lambda args: Transparent_Signal_Processing_Network(signal_processing_modules, feature_extractor_modules,args),
-                'TKAN': lambda args: Transparent_Signal_Processing_KAN(signal_processing_modules, feature_extractor_modules,args),
-                'NNSPN': lambda args: NN_Signal_Processing_Network(signal_processing_modules, feature_extractor_modules,args),
-                'TFON': lambda args: Time_Frequency_Operator_Network(signal_processing_modules, feature_extractor_modules,args),
-            }
-
-            model_plain = MODEL_DICT[args.model](args)
-
-            # network = Transparent_Signal_Processing_Network(signal_processing_modules, feature_extractor_modules,args)
-            #model trainer #
-            model = Basic_plmodel(model_plain, args)
-            model_structure = print(model.network)
-            trainer,train_dataloader, val_dataloader, test_dataloader = trainer_set(args,path)
-
-            # train
-            trainer.fit(model,train_dataloader, val_dataloader) # TODO load best checkpoint
-
-            model = load_best_model_checkpoint(model,trainer)
-
-            result = trainer.test(model,test_dataloader)
-
-            # 保存结果
-            result_df = pd.DataFrame(result)
-            result_df.to_csv(os.path.join(path, 'test_result.csv'), index=False)
-            # wandb.finish()
-        
+DEFAULT_CONFIG = "configs/tspn_suda_demo.yaml"
 
 
+def parse_cli_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="TSPN demo trainer")
+    parser.add_argument("--config", type=str, default=DEFAULT_CONFIG, help="Path to the TSPN demo YAML config.")
+    parser.add_argument(
+        "--config_dir",
+        type=str,
+        default=None,
+        help="Backward-compatible alias for --config. --config takes precedence.",
+    )
+    parser.add_argument("--device", type=str, default=None, choices=["cpu", "cuda"], help="Override device.")
+    parser.add_argument("--epochs", type=int, default=None, help="Override number of epochs.")
+    parser.add_argument("--batch-size", type=int, default=None, help="Override batch size.")
+    parser.add_argument("--patience", type=int, default=None, help="Override early-stopping patience.")
+    parser.add_argument("--notes", type=str, default="", help="Optional run note printed to stdout.")
+    return parser.parse_args()
 
 
+def resolve_config_path(cli_args: argparse.Namespace) -> str:
+    if cli_args.config != DEFAULT_CONFIG:
+        return cli_args.config
+    return cli_args.config_dir or cli_args.config
+
+
+def apply_cli_overrides(args: argparse.Namespace, cli_args: argparse.Namespace) -> argparse.Namespace:
+    if cli_args.device is not None:
+        args.device = cli_args.device
+    if cli_args.epochs is not None:
+        args.num_epochs = cli_args.epochs
+    if cli_args.batch_size is not None:
+        args.batch_size = cli_args.batch_size
+    if cli_args.patience is not None:
+        args.patience = cli_args.patience
+
+    if str(args.device).lower() == "cuda" and not torch.cuda.is_available():
+        print("CUDA requested but unavailable; falling back to CPU.")
+        args.device = "cpu"
+
+    args.gpus = 1 if str(args.device).lower() == "cpu" else int(getattr(args, "gpus", 1))
+    args.num_workers = int(getattr(args, "num_workers", 0))
+    args.pin_memory = bool(getattr(args, "pin_memory", False))
+    args.log_parameters = bool(getattr(args, "log_parameters", False))
+    args.pruning = getattr(args, "pruning", None)
+    args.monitor = getattr(args, "monitor", "val_loss")
+    args.patience = int(getattr(args, "patience", 20))
+    return args
+
+
+def build_tspn_model(configs: dict, args: argparse.Namespace) -> Basic_plmodel:
+    if args.model != "TSPN":
+        raise ValueError(f"TSPN demo only supports model='TSPN', got {args.model!r}.")
+
+    signal_processing_modules, feature_extractor_modules = config_network(configs, args)
+    network = Transparent_Signal_Processing_Network(signal_processing_modules, feature_extractor_modules, args)
+    model = Basic_plmodel(network, args)
+    print(model.network)
+    return model
+
+
+def main() -> None:
+    torch.set_float32_matmul_precision("medium")
+
+    cli_args = parse_cli_args()
+    config_path = resolve_config_path(cli_args)
+    configs, args, path, name = parse_arguments(config_path, 0)
+    args = apply_cli_overrides(args, cli_args)
+
+    seed_everything(args.seed)
+    if cli_args.notes:
+        print(f"Run notes: {cli_args.notes}")
+
+    model = build_tspn_model(configs, args)
+    trainer, train_dataloader, val_dataloader, test_dataloader = trainer_set(args, path)
+
+    trainer.fit(model, train_dataloader, val_dataloader)
+    model = load_best_model_checkpoint(model, trainer)
+    result = trainer.test(model, test_dataloader)
+
+    result_df = pd.DataFrame(result)
+    result_path = Path(path) / "test_result.csv"
+    os.makedirs(path, exist_ok=True)
+    result_df.to_csv(result_path, index=False)
+
+    print(f"Run name: {name}")
+    print(f"Run directory: {path}")
+    print(f"Test result: {result}")
+    print(f"Saved test result: {result_path}")
+
+
+if __name__ == "__main__":
+    main()

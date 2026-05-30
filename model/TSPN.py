@@ -116,7 +116,7 @@ class FeatureExtractorlayer(nn.Module):
         outputs = []
         for module in self.feature_extractor_modules.values():
             outputs.append(module(x))
-        res = torch.cat(outputs, dim=1).squeeze() # B,C
+        res = torch.cat(outputs, dim=1).squeeze(-1) # B,C
         return self.norm(res)
 
 class Classifier(nn.Module):
