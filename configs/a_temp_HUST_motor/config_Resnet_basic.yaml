@@ -3,7 +3,8 @@ args:
   device: cuda
   data_dir: 'E:/dataset/generate/HUST_bearing_new/HUST_motor_4096/'
   dataset_task: a_temp_HUST_motor_basic
-  target: 'HUST_20Hz_6' # HUST_bearing_20Hz, HUST_bearing_VS_0_40_0Hz
+  target: 'HUST_5Hz_6' # HUST_bearing_20Hz, HUST_bearing_VS_0_40_0Hz
+  target_list: ['HUST_5Hz_6', 'HUST_10Hz_6', 'HUST_20Hz_6', 'HUST_30Hz_6']
   k_shot: 64
 
 # model

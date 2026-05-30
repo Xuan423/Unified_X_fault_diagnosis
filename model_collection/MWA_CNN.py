@@ -60,20 +60,20 @@ class Huan_net(nn.Module):
         super(Huan_net, self).__init__()
     
         
-        self.DWT0= DWT1DForward(J=1, wave='db16').cuda()
+        self.DWT0 = DWT1DForward(J=1, wave='db16')
         
         self.SConv1 = SConv_1D(input_size*2, numf, 3, 0)
-        self.DWT1= DWT1DForward(J=1, wave='db16').cuda()
+        self.DWT1 = DWT1DForward(J=1, wave='db16')
         self.dropout1 = nn.Dropout(p=0.1)
         self.cSE1 = A_cSE(numf*2)
         
         self.SConv2 = SConv_1D(numf*2, numf*2, 3, 0)
-        self.DWT2= DWT1DForward(J=1, wave='db16').cuda() 
+        self.DWT2 = DWT1DForward(J=1, wave='db16')
         self.dropout2 = nn.Dropout(p=0.1)
         self.cSE2 = A_cSE(numf*4)
         
         self.SConv3 = SConv_1D(numf*4, numf*4, 3, 0)
-        self.DWT3= DWT1DForward(J=1, wave='db16').cuda()       
+        self.DWT3 = DWT1DForward(J=1, wave='db16')
         self.dropout3 = nn.Dropout(p=0.1)
         self.cSE3 = A_cSE(numf*8)
         

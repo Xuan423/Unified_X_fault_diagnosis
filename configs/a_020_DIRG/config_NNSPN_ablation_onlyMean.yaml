@@ -9,10 +9,12 @@ feature_extractor_configs: ['Mean']
 args:
 
   device: cuda
-  data_dir: '/home/user/data/a_bearing/a_020_DIRG_pro/' # '/home/user/data/a_bearing/a_006_THU_pro/LQ_fusion/' '/home/user/data/a_bearing/a_018_THU24_pro/'
+  data_dir: 'E:/dataset/generate/PHMbench_DIRG_020_4096/'
   dataset_task: DIRG_020_basic # THU_006_basic THU_006_generalization THU_006_fusion THU_018_basic THU_018_generalization THU_018_fusion
 
-  target: '500' # if basic or generalization 1hz 10hz 15hz
+  target: 'DIRG_020_100Hz_0N'
+
+  target_list: ['DIRG_020_100Hz_0N', 'DIRG_020_100Hz_1000N', 'DIRG_020_100Hz_1400N', 'DIRG_020_100Hz_1800N', 'DIRG_020_200Hz_0N', 'DIRG_020_200Hz_1000N', 'DIRG_020_200Hz_1400N', 'DIRG_020_200Hz_1800N']
   k_shot: 64
 
 
@@ -35,14 +37,14 @@ args:
   # wandb_flag: False
   learning_rate: 0.001
   batch_size: 64
-  num_epochs: 300
+  num_epochs: 200
   weight_decay: 0.0001
-  num_workers: 32
+  num_workers: 2
   seed: 17
 
 # train
   monitor: 'val_loss'
-  patience: 10
+  patience: 100
   gpus: 1
   weight_decay: 0.0001
   l1_norm: 0.001
@@ -50,4 +52,4 @@ args:
   log_parameters: True
 
   pruning: [0.7,0.5,0.01]
-  snr: 1
+  snr: 0

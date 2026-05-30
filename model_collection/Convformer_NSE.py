@@ -355,7 +355,9 @@ def convormer_v1_big(in_c, h_args, num_cls):
 
 if __name__ == '__main__':
     model = convoformer_v1_small(in_channel=4, out_channel=10)
-    input = torch.randn(2, 4096, 4)
+    input = torch.randn(2, 1024, 4)
     output = model(input)
     # 计算模型参数
     total_params = sum(p.numel() for p in model.parameters())
+    print(f'Total parameters: {total_params}')
+    print(output.shape)

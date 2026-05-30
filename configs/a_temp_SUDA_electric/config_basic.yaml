@@ -38,8 +38,8 @@ args:
   batch_size: 64
   num_epochs: 200
   weight_decay: 0.0001
-  num_workers: 4
-  seed: 20
+  num_workers: 2
+  seed: 17
   persistent_workers: True
 
 # train

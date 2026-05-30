@@ -13,7 +13,7 @@ args:
   data_dir: 'E:/dataset/generate/SEU_bearing/'  
   dataset_task: SEU_010_Basic
   target: 'SEU_bearing_20Hz_2' # SEU_bearing_20Hz_2, SEU_bearing_30Hz_2
-  target_list: ['SEU_bearing_20Hz_2', 'SEU_bearing_30Hz_2']
+  target_list: ['SEU_bearing_20Hz_2']
   k_shot: 64
 
 
@@ -37,7 +37,7 @@ args:
   batch_size: 64
   num_epochs: 200
   weight_decay: 0.0001
-  num_workers: 4
+  num_workers: 2
   seed: 17
 
 # train
@@ -47,6 +47,6 @@ args:
   l1_norm: 0.0001
 
   pruning: None # [0.7,0.5,0.01]
-  snr: [0,5] # 20dB, 10dB, 0dB
-  snr_mode: "per_sample_channel"
-  snr_eval: true
+  snr: 0 # 20dB, 10dB, 0dB
+  # snr_mode: "per_sample_channel"
+  # snr_eval: true

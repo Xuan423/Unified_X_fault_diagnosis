@@ -8,8 +8,8 @@ DATASET_TASK_CLASS = {
     'THU_018_few_shot': THU_006or018_few_shot,
     'THU_006_few_shot': THU_006or018_few_shot,
     'THU_006_generalization': THU_006_generalization,
-    'DIRG_020_basic': DIRG_020_basic,
-    'DIRG_020_geberalization': Default_generalization,
+    'DIRG_020_basic': Default_dataset,
+    'DIRG_020_generalization': Default_generalization,
     'HUST_031_Basic': Default_dataset,
     'SEU_010_Basic': Default_dataset,
     'a_027_PU': Default_dataset,
@@ -20,7 +20,9 @@ DATASET_TASK_CLASS = {
     'a_temp_SUDA_basic': Default_dataset,
     'a_temp_SUDA_generalization': Old_Generalization,
     'a_temp_HUST_motor_basic': Default_dataset,
-    'a_temp_HUST_motor_generalization': Default_generalization
+    'a_temp_HUST_motor_generalization': Default_generalization,
+    'b_pu_generalization': Default_generalization,
+    'b_bjut_generalization': Default_generalization
 }
 
 def get_data(args):

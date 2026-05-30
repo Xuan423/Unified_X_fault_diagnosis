@@ -13,6 +13,7 @@ args:
   data_dir: 'E:/dataset/generate/HUST_bearing_new/HUST_motor_4096/'
   dataset_task: a_temp_HUST_motor_basic
   target: 'HUST_5Hz_6' # HUST_bearing_20Hz, HUST_bearing_VS_0_40_0Hz
+  target_list: ['HUST_5Hz_6', 'HUST_10Hz_6', 'HUST_20Hz_6', 'HUST_30Hz_6']
 
   k_shot: 64
 
@@ -38,7 +39,7 @@ args:
   num_epochs: 200
   weight_decay: 0.0001
   num_workers: 4
-  seed: 18
+  seed: 25
   persistent_workers: True
 
 # train
@@ -49,4 +50,4 @@ args:
   l1_norm: 0.0001
 
   pruning: None # [0.7,0.5,0.01]
-  snr: 2
+  snr: 0

@@ -5,61 +5,84 @@ import torch.nn as nn
 from einops import rearrange
 import torch.nn.functional as F
 
+# class CustomBatchNorm(nn.Module):
+#     def __init__(self, num_features, eps=0.1):
+#         super(CustomBatchNorm, self).__init__()
+#         self.num_features = num_features
+#         self.eps = eps
+#         self.register_buffer('running_mean', torch.zeros(1,num_features))
+#         self.register_buffer('running_var', torch.ones(1,num_features))
+
+#     def forward(self, x):
+#         if self.training:
+#             mean = x.mean(dim=0)
+#             var = x.var(dim=0, unbiased=False)
+#             self.running_mean = (1 - self.eps) * self.running_mean + self.eps * mean
+#             self.running_var = (1 - self.eps) * self.running_var + self.eps * var
+#             out = (x - mean) / (var.sqrt() + self.eps)
+#         else:
+#             out = (x - self.running_mean) / (self.running_var.sqrt() + self.eps)
+#         return out
+    
 class CustomBatchNorm(nn.Module):
-    def __init__(self, num_features, eps=0.1):
-        super(CustomBatchNorm, self).__init__()
-        self.num_features = num_features
+    def __init__(self, num_features, eps=1e-5, momentum=0.1):
+        super().__init__()
         self.eps = eps
-        self.register_buffer('running_mean', torch.zeros(1,num_features))
-        self.register_buffer('running_var', torch.ones(1,num_features))
+        self.momentum = momentum
+        self.register_buffer("running_mean", torch.zeros(1, num_features))
+        self.register_buffer("running_var", torch.ones(1, num_features))
 
     def forward(self, x):
         if self.training:
-            mean = x.mean(dim=0)
-            var = x.var(dim=0, unbiased=False)
-            self.running_mean = (1 - self.eps) * self.running_mean + self.eps * mean
-            self.running_var = (1 - self.eps) * self.running_var + self.eps * var
-            out = (x - mean) / (var.sqrt() + self.eps)
+            mean = x.mean(dim=0, keepdim=True)
+            var = x.var(dim=0, unbiased=False, keepdim=True)
+
+            with torch.no_grad():
+                self.running_mean.mul_(1 - self.momentum).add_(self.momentum * mean.detach())
+                self.running_var.mul_(1 - self.momentum).add_(self.momentum * var.detach())
+
+            out = (x - mean) / torch.sqrt(var + self.eps)
         else:
-            out = (x - self.running_mean) / (self.running_var.sqrt() + self.eps)
+            out = (x - self.running_mean) / torch.sqrt(self.running_var + self.eps)
         return out
 
 class SignalProcessingLayer(nn.Module):
-    # TODO op first then weight connection -> attention
-    def __init__(self, signal_processing_modules, input_channels, output_channels,skip_connection=True):
-        super(SignalProcessingLayer, self).__init__()
+    def __init__(self, signal_processing_modules, input_channels, output_channels, skip_connection=True):
+        super().__init__()
         self.norm = nn.InstanceNorm1d(input_channels)
-        self.weight_connection = nn.Linear(input_channels, output_channels)
+        self.weight_connection = nn.Linear(input_channels, output_channels, bias=False)
         self.signal_processing_modules = signal_processing_modules
         self.module_num = len(signal_processing_modules)
         self.temperature = 0.1
-        
+
+        # 用 buffer 记录“当前forward用到的归一化权重”，便于可视化/保存（不参与梯度）
+        self.register_buffer("alpha_main", torch.empty(output_channels, input_channels), persistent=True)
+
         if skip_connection:
-            self.skip_connection = nn.Linear(input_channels, output_channels)
+            self.skip_connection = nn.Linear(input_channels, output_channels, bias=False)
+            self.register_buffer("alpha_skip", torch.empty(output_channels, input_channels), persistent=True)
+
     def forward(self, x):
-        # 信号标准化
         x = rearrange(x, 'b l c -> b c l')
         normed_x = self.norm(x)
         normed_x = rearrange(normed_x, 'b c l -> b l c')
-        # 通过线性层
-        
-        self.weight_connection.weight.data = F.softmax((1.0 / self.temperature) *
-                                                       self.weight_connection.weight.data, dim=0)
-        x = self.weight_connection(normed_x)
 
-        # 按模块数拆分
+        # 主分支：每个输出通道对输入通道的权重和=1（dim=1）
+        W = self.weight_connection.weight                           # [Cout,Cin]
+        alpha = F.softmax(W / self.temperature, dim=1)              # 行和=1
+        self.alpha_main.copy_(alpha.detach())                       # 记录
+        x = F.linear(normed_x, alpha, self.weight_connection.bias)
+
         splits = torch.split(x, x.size(2) // self.module_num, dim=2)
+        outs = [m(s) for m, s in zip(self.signal_processing_modules.values(), splits)]
+        x = torch.cat(outs, dim=2)
 
-        # 通过模块计算
-        outputs = []
-        for module, split in zip(self.signal_processing_modules.values(), splits):
-            outputs.append(module(split))
-        x = torch.cat(outputs, dim=2)
-        # 添加skip connection
         if hasattr(self, 'skip_connection'):
-            # self.skip_connection.weight.data = F.softmax((1.0 / self.temperature) *
-            #                                             self.skip_connection.weight.data, dim=0)
-            x = x + self.skip_connection(normed_x)
+            Ws = self.skip_connection.weight
+            alpha_s = F.softmax(Ws / self.temperature, dim=1)
+            self.alpha_skip.copy_(alpha_s.detach())
+            x = x + F.linear(normed_x, alpha_s, self.skip_connection.bias)
+
         return x
     
 class FeatureExtractorlayer(nn.Module):
@@ -100,11 +123,16 @@ class Classifier(nn.Module):
     def __init__(self, in_channels, num_classes): # TODO logic
         super(Classifier, self).__init__()
         self.clf = nn.Sequential(
-            nn.Linear(in_channels, 128),
+            nn.Linear(in_channels, 64),
             nn.ReLU(),
-            nn.Linear(128, num_classes)
-            
+            nn.Dropout(0.1),
+            nn.Linear(64, num_classes)
         )
+        # self.clf = nn.Sequential(
+        #     nn.Linear(in_channels, 128),
+        #     nn.ReLU(),
+        #     nn.Linear(128, num_classes)
+        # )
         # self.clf = nn.Linear(in_channels, num_classes)
         
     def forward(self, x):

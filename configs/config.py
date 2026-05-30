@@ -96,7 +96,15 @@ ALL_LI = {
     'sdisj': StrongDisjunctionOperation,
 }
 
-def parse_arguments(config_dir,it):
+def parse_arguments(
+    config_dir,
+    it,
+    run_tag=None,
+    target_override=None,
+    source_override=None,
+    create_path=True,
+    verbose=True,
+):
     # 解析参数
     
     # args_dir = parser.parse_args()
@@ -106,6 +114,10 @@ def parse_arguments(config_dir,it):
     with open(yaml_dir, 'r') as f:
         config = yaml.safe_load(f)
     args = SimpleNamespace(**config['args'])
+    if target_override is not None:
+        args.target = target_override
+    if source_override is not None:
+        args.source = source_override
 
     # WSL/Linux兼容：将 Windows 盘符路径(如 E:/xxx 或 E:\\xxx)映射到 /mnt/e/xxx
     if hasattr(args, "data_dir") and isinstance(args.data_dir, str):
@@ -122,13 +134,15 @@ def parse_arguments(config_dir,it):
     
     # dataset = args.data_dir[-3:].replace('/','')
     time_stamp = time.strftime("%d-%H-%M-%S", time.localtime())
-    name = f'model_{args.model}time{time_stamp}_dataset{args.dataset_task}_it{it}'
+    tag_suffix = f'_{run_tag}' if run_tag else ''
+    name = f'model_{args.model}time{time_stamp}_dataset{args.dataset_task}_it{it}{tag_suffix}'
 
-    print(f'Running experiment: {name}')
+    if verbose:
+        print(f'Running experiment: {name}')
     
     # if args.debug != 'True':
     path = 'save/' + f'task_{args.dataset_task}/'+f'model_{args.model}/' + name
-    if not os.path.exists(path):
+    if create_path and not os.path.exists(path):
         os.makedirs(path)
     args.path = path
     return config,args,path,name

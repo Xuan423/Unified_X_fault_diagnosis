@@ -26,17 +26,16 @@ args:
 # hyperparameter
   learning_rate: 0.001
   batch_size: 64
-  num_epochs: 200
-  weight_decay: 0.0001
-  num_workers: 4
+  num_epochs: 100
+  weight_decay: 0
+  num_workers: 2
   seed: 17
 
 # train
   monitor: 'val_loss'
-  patience: 100
+  patience: 50
   gpus: 1
-  weight_decay: 0.0001
-  l1_norm: 0.0001
+  l1_norm: 0
 
   pruning: None # [0.7,0.5,0.01]
-  snr: 10
+  snr: 0

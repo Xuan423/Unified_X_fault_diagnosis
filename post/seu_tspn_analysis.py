@@ -209,7 +209,8 @@ def aggregate_by_group(
     for label in unique_labels:
         mask = group_labels == label
         if np.any(mask):
-            aggregated.append(values[mask].mean(axis=0))
+            aggregated.append(values[mask][30,:])
+            # aggregated.append(values[mask].mean(axis=0))
         else:
             aggregated.append(np.full(values.shape[1], fill_value))
     return np.vstack(aggregated), unique_labels
@@ -256,25 +257,26 @@ FEATURE_GROUPS: Mapping[str, str] = OrderedDict(
     {
         'RMS': 'Energy',
         'Var': 'Energy',
-        'Max': 'Energy',
+        'Max': 'Impulse',
         'Mean': 'Energy',
-        'Min': 'Energy',
-        'Kurtosis': 'Impact',
-        'CrestFactor': 'Impact',
-        'ClearanceFactor': 'Impact',
-        'ShapeFactor': 'Impact',
+        'Min': 'Impulse',
+        'Kurtosis': 'Impulse',
+        'CrestFactor': 'Impulse',
+        'ClearanceFactor': 'Impulse',
+        'ShapeFactor': 'Shape',
         'Entropy': 'Complexity',
-        'Skewness': 'Complexity',
-        'AbsMean': 'Complexity',
-        'Std': 'Complexity',
+        'Skewness': 'Shape',
+        'AbsMean': 'Energy',
+        'Std': 'Energy',
     }
 )
 
 GROUP_COLOURS = {
     'Energy': '#3366CC',
-    'Impact': '#FF9933',
-    'Complexity': '#009966',
-    'Other': '#7F7F7F',
+    'Impulse': '#FF9933',
+    'Shape': '#009966',
+    'Complexity': '#7F7F7F',
+    'Other': '#CCCCCC',
 }
 
 
@@ -310,9 +312,10 @@ def plot_grouped_radar(
         values.append(values[0])
         ax.plot(angles, values, color='#283D7E', linewidth=2)
         ax.fill(angles, values, color='#5291B2', alpha=0.2)
-        ax.set_yticks([0.0, 0.5, 1.0])
-        ax.set_ylim(0, 1.1)
-        ax.set_title(class_names[idx], fontsize=14)
+        ax.tick_params(axis='y', labelsize=12)
+        ax.set_yticks([0.25, 0.5, 0.75, 1.0])
+        ax.set_ylim(0.25, 1.1)
+        # ax.set_title(class_names[idx], fontsize=14)
 
         width = 2 * np.pi / num_features
         for angle, label, group in zip(angles[:-1], feature_names, group_labels):
@@ -330,12 +333,12 @@ def plot_grouped_radar(
             )
             ax.text(
                 angle,
-                1.15,
+                1.2,
                 label,
-                color=color,
+                color='black',
                 ha='center',
                 va='center',
-                fontsize=10,
+                fontsize=12,
             )
         ax.set_xticks([])
 
@@ -345,7 +348,7 @@ def plot_grouped_radar(
     ]
     handles = [plt.Line2D([0], [0], color=color, lw=8) for color, _ in legend_entries]
     labels = [group for _, group in legend_entries]
-    fig.legend(handles, labels, loc='upper center', ncol=len(labels))
+    fig.legend(handles, labels, loc='upper center', ncol=len(labels), fontsize=14)
     fig.tight_layout(rect=(0, 0, 1, 0.92))
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -540,28 +543,28 @@ def render_summary_report(
 
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description='SEU TSPN analysis pipeline.')
-    # parser.add_argument('--config', type=Path, default=Path('configs/a_010_SEU/config_basic.yaml'))
-    # parser.add_argument('--checkpoint', type=Path, default=Path('save/test/model_seu/tspn.ckpt'))
-    # parser.add_argument('--data', type=Path, default='E:/dataset/generate/SEU_bearing/SEU_bearing_20Hz_2_data.npy', help='Path to SEU signal array (.npy).')
-    # parser.add_argument('--labels', type=Path, default='E:/dataset/generate/SEU_bearing/SEU_bearing_20Hz_2_label.npy', help='Path to SEU label array (.npy).')
-    parser.add_argument('--config', type=Path, default=Path('configs/a_temp_SUDA_electric/config_basic.yaml'))
-    parser.add_argument('--checkpoint', type=Path, default=Path('save/test/model_suda/model_tspn_suda_02.ckpt'))
-    parser.add_argument('--data', type=Path, default='E:/dataset/generate/SUDA_electric/SUDA_electric_0kg_2500r_1000Hz_data.npy', help='Path to SEU signal array (.npy).')
-    parser.add_argument('--labels', type=Path, default='E:/dataset/generate/SUDA_electric/SUDA_electric_0kg_2500r_1000Hz_label.npy', help='Path to SEU label array (.npy).')
+    parser.add_argument('--config', type=Path, default=Path('configs/a_010_SEU/config_basic.yaml'))
+    parser.add_argument('--checkpoint', type=Path, default=Path('save/test/model_seu/tspn2.ckpt'))
+    parser.add_argument('--data', type=Path, default='E:/dataset/generate/SEU_bearing/SEU_bearing_20Hz_2_data.npy', help='Path to SEU signal array (.npy).')
+    parser.add_argument('--labels', type=Path, default='E:/dataset/generate/SEU_bearing/SEU_bearing_20Hz_2_label.npy', help='Path to SEU label array (.npy).')
+    # parser.add_argument('--config', type=Path, default=Path('configs/a_temp_SUDA_electric/config_basic.yaml'))
+    # parser.add_argument('--checkpoint', type=Path, default=Path('save/test/model_suda/model_tspn_suda_02.ckpt'))
+    # parser.add_argument('--data', type=Path, default='E:/dataset/generate/SUDA_electric/SUDA_electric_0kg_2500r_1000Hz_data.npy', help='Path to SEU signal array (.npy).')
+    # parser.add_argument('--labels', type=Path, default='E:/dataset/generate/SUDA_electric/SUDA_electric_0kg_2500r_1000Hz_label.npy', help='Path to SEU label array (.npy).')
     parser.add_argument('--speed-labels', type=Path, default=None, help='Optional speed condition labels (.npy).')
     parser.add_argument('--load-labels', type=Path, default=None, help='Optional load condition labels (.npy).')
     parser.add_argument('--class-names', type=str, nargs='*', default=None)
     parser.add_argument('--speed-names', type=str, nargs='*', default=None)
     parser.add_argument('--load-names', type=str, nargs='*', default=None)
-    # parser.add_argument('--output-dir', type=Path, default=Path('save/figure/seu/analysis'))
-    parser.add_argument('--output-dir', type=Path, default=Path('save/figure/suda/analysis'))
+    parser.add_argument('--output-dir', type=Path, default=Path('save/figure/seu/analysis'))
+    # parser.add_argument('--output-dir', type=Path, default=Path('save/figure/suda/analysis'))
     parser.add_argument('--figure-format', type=str, default='svg', choices=['png', 'pdf', 'svg'])
     parser.add_argument('--batch-size', type=int, default=64)
     parser.add_argument('--device', type=str, default=None)
-    # parser.add_argument('--report-path', type=Path, default=Path('reports/seu_tspn_analysis_report.md'))
-    # parser.add_argument('--modal-names', type=str, nargs='*', default=['Torque', 'Vibration'])
-    parser.add_argument('--report-path', type=Path, default=Path('reports/suda_tspn_analysis_report.md'))
-    parser.add_argument('--modal-names', type=str, nargs='*', default=['J3 axis', 'U phase', 'V phase', 'W phase', 'D axis'])
+    parser.add_argument('--report-path', type=Path, default=Path('reports/seu_tspn_analysis_report.md'))
+    parser.add_argument('--modal-names', type=str, nargs='*', default=['Torque', 'Vibration'])
+    # parser.add_argument('--report-path', type=Path, default=Path('reports/suda_tspn_analysis_report.md'))
+    # parser.add_argument('--modal-names', type=str, nargs='*', default=['J3 axis', 'U phase', 'V phase', 'W phase', 'D axis'])
     return parser.parse_args(argv)
 
 
@@ -624,13 +627,18 @@ def main(argv: Sequence[str] | None = None) -> None:
     )
     channel_count = network.channel_for_feature
     metrics_per_sample = (
-        features.reshape(features.shape[0], channel_count, len(feature_module_names)).mean(axis=1)
+        features.reshape(features.shape[0], channel_count, len(feature_module_names))
     )
-
+    # 计算每个特征的RMS并沿axis1进行平均
+    metrics_per_sample = np.sqrt(np.mean(np.square(metrics_per_sample), axis=1))
     class_means, _ = aggregate_by_group(metrics_per_sample, labels)
-    min_vals = class_means.min(axis=0, keepdims=True)
-    ptp_vals = np.ptp(class_means, axis=0, keepdims=True) + 1e-8
-    normed_means = (class_means - min_vals) / ptp_vals
+
+    # min_vals = class_means.min(axis=1, keepdims=True)
+    # ptp_vals = np.ptp(class_means, axis=1, keepdims=True) + 1e-8
+    # normed_means = (class_means - min_vals) / ptp_vals
+    # norm
+    max_vals = class_means.max(axis=1, keepdims=True)
+    normed_means = class_means / (max_vals + 1e-8)
 
     radar_path = args.output_dir / 'class_radar'
     plot_grouped_radar(normed_means, feature_module_names, class_names, radar_path, args.figure_format)

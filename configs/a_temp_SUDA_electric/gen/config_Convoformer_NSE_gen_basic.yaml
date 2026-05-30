@@ -5,6 +5,7 @@ args:
   dataset_task: a_temp_SUDA_generalization
   source: ['SUDA_electric_0kg_2500r_1000Hz', 'SUDA_electric_0kg_4000r_1000Hz', 'SUDA_electric_6kg_2500r_1000Hz', 'SUDA_electric_6kg_4000r_1000Hz']
   target: ['SUDA_electric_0kg_3000r_1000Hz']
+  target_list: [['SUDA_electric_0kg_3000r_1000Hz'], ['SUDA_electric_0kg_3500r_1000Hz'], ['SUDA_electric_3kg_2500r_1000Hz'], ['SUDA_electric_3kg_3000r_1000Hz'], ['SUDA_electric_3kg_3500r_1000Hz'], ['SUDA_electric_3kg_4000r_1000Hz'], ['SUDA_electric_6kg_3000r_1000Hz'], ['SUDA_electric_6kg_3500r_1000Hz']]
   k_shot: 64
 
   # model

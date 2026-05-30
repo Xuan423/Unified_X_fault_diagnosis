@@ -12,10 +12,11 @@ feature_extractor_configs: ['Mean', 'Std', 'Var', 'Entropy','Max', 'Min', 'AbsMe
 
 args:
   device: cuda
-  data_dir: '/home/user/data/a_bearing/a_020_DIRG_pro/' # '/home/user/data/a_bearing/a_006_THU_pro/LQ_fusion/' '/home/user/data/a_bearing/a_018_THU24_pro/'
-  dataset_task: DIRG_020_geberalization # THU_006_basic THU_006_generalization THU_006_fusion THU_018_basic THU_018_generalization THU_018_fusion
-  source: ['100','300','400','500']
-  target: ['200'] # if basic or generalization 1hz 10hz 15hz
+  data_dir: 'E:/dataset/generate/PHMbench_DIRG_020_4096/'
+  dataset_task: DIRG_020_generalization # THU_006_basic THU_006_generalization THU_006_fusion THU_018_basic THU_018_generalization THU_018_fusion
+  source: ['DIRG_020_100Hz_0N', 'DIRG_020_100Hz_1800N', 'DIRG_020_200Hz_0N', 'DIRG_020_200Hz_1800N']
+  target: ['DIRG_020_100Hz_1000N','DIRG_020_100Hz_1400N','DIRG_020_200Hz_1000N','DIRG_020_200Hz_1400N']
+  target_list: [['DIRG_020_100Hz_1000N'], ['DIRG_020_100Hz_1400N'], ['DIRG_020_200Hz_1000N'], ['DIRG_020_200Hz_1400N']]
   k_shot: 64
 
 
@@ -37,8 +38,8 @@ args:
 # hyperparameter
   learning_rate: 0.001
   batch_size: 512
-  num_epochs: 300
-  num_workers: 32
+  num_epochs: 200
+  num_workers: 2
   seed: 17
 
 # train
@@ -52,5 +53,5 @@ args:
 
   pruning: False # [0.7,0.5,0.01]
 
-  snr: False
+  snr: 0
   mixup: False

@@ -6,22 +6,25 @@ from einops import rearrange
 import torch.nn.functional as F
 
 class CustomBatchNorm(nn.Module):
-    def __init__(self, num_features, eps=0.1):
-        super(CustomBatchNorm, self).__init__()
-        self.num_features = num_features
+    def __init__(self, num_features, eps=1e-5, momentum=0.1):
+        super().__init__()
         self.eps = eps
-        self.register_buffer('running_mean', torch.zeros(1,num_features))
-        self.register_buffer('running_var', torch.ones(1,num_features))
+        self.momentum = momentum
+        self.register_buffer("running_mean", torch.zeros(1, num_features))
+        self.register_buffer("running_var", torch.ones(1, num_features))
 
     def forward(self, x):
         if self.training:
-            mean = x.mean(dim=0)
-            var = x.var(dim=0, unbiased=False)
-            self.running_mean = (1 - self.eps) * self.running_mean + self.eps * mean
-            self.running_var = (1 - self.eps) * self.running_var + self.eps * var
-            out = (x - mean) / (var.sqrt() + self.eps)
+            mean = x.mean(dim=0, keepdim=True)
+            var = x.var(dim=0, unbiased=False, keepdim=True)
+
+            with torch.no_grad():
+                self.running_mean.mul_(1 - self.momentum).add_(self.momentum * mean.detach())
+                self.running_var.mul_(1 - self.momentum).add_(self.momentum * var.detach())
+
+            out = (x - mean) / torch.sqrt(var + self.eps)
         else:
-            out = (x - self.running_mean) / (self.running_var.sqrt() + self.eps)
+            out = (x - self.running_mean) / torch.sqrt(self.running_var + self.eps)
         return out
 
 class SignalProcessingLayer(nn.Module):

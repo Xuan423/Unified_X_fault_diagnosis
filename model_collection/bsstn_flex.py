@@ -72,6 +72,9 @@ class BSSTNFlex(nn.Module):
         self.return_all = return_all
 
         self.Fdim = self.cfg.n_fft // 2 + 1  # 1025 for n_fft=2048
+        self._base_n_fft = self.cfg.n_fft
+        self._base_hop = self.cfg.hop
+        self._base_T = self.cfg.T
 
         # Function graph view
         self.convF1 = ChebConv(self.Fdim, h1, cheb_k)
@@ -99,9 +102,8 @@ class BSSTNFlex(nn.Module):
         # Cache physical edge_index by C (nodes per graph = T*C)
         self._phys_edge_cache: dict[int, torch.Tensor] = {}
 
-        # Pre-create window (registered buffer so it moves with .to(device))
-        win = torch.hann_window(self.cfg.n_fft)
-        self.register_buffer("_fft_window", win, persistent=False)
+        # Cache FFT windows by n_fft (created lazily)
+        self._window_cache: dict[int, torch.Tensor] = {}
 
     # ---------- optional AWGN (you can also keep your existing wgn2 in Lightning) ----------
     @staticmethod
@@ -118,17 +120,49 @@ class BSSTNFlex(nn.Module):
         return x + noise
 
     # ---------- feature extraction ----------
-    def _extract_fft_feats(self, x_blc: torch.Tensor) -> torch.Tensor:
+    def _effective_fft_params(self, L: int) -> Tuple[int, int, int]:
+        """
+        Choose FFT params based on input length.
+        Keeps the overall idea (multi-window FFT) while adapting to short inputs.
+        """
+        if L <= 0:
+            raise ValueError(f"Invalid L={L}.")
+        # pick highest power-of-two <= L, but not exceeding base n_fft
+        pow2 = 2 ** int(torch.floor(torch.log2(torch.tensor(L, dtype=torch.float))).item())
+        n_fft = int(min(self._base_n_fft, max(256, pow2)))
+        n_fft = min(n_fft, L)
+        hop = min(self._base_hop, max(1, n_fft // 2))
+        if L < n_fft:
+            n_fft = L
+            hop = max(1, n_fft // 2)
+        # max possible segments, capped by base T
+        max_T = 1 + max(0, (L - n_fft) // hop)
+        T = max(1, min(self._base_T, max_T))
+        return n_fft, hop, T
+
+    def _resize_freq(self, z_btcf: torch.Tensor, target_fdim: int) -> torch.Tensor:
+        """
+        Resize frequency dimension to target_fdim using 1D linear interpolation.
+        z_btcf: [B, T, C, F]
+        """
+        B, T, C, Fdim = z_btcf.shape
+        if Fdim == target_fdim:
+            return z_btcf
+        z = z_btcf.reshape(B * T * C, 1, Fdim)
+        z = F.interpolate(z, size=target_fdim, mode="linear", align_corners=False)
+        return z.reshape(B, T, C, target_fdim)
+
+    def _extract_fft_feats(self, x_blc: torch.Tensor, n_fft: int, hop: int, T: int) -> torch.Tensor:
         """
         x_blc: [B, L, C]
         Return z: [B, T, C, Fdim]
         """
         B, L, C = x_blc.shape
-        T = self.cfg.T
-        n_fft = self.cfg.n_fft
-        hop = self.cfg.hop
-        if L < n_fft + (T - 1) * hop:
-            raise ValueError(f"L={L} too short for T={T}, n_fft={n_fft}, hop={hop}")
+        required = n_fft + (T - 1) * hop
+        if L < required:
+            pad_len = required - L
+            x_blc = F.pad(x_blc, (0, 0, 0, pad_len))
+            L = x_blc.shape[1]
 
         # [B, C, L]
         x_bcl = x_blc.permute(0, 2, 1).contiguous()
@@ -136,7 +170,10 @@ class BSSTNFlex(nn.Module):
         # segment starts: 0, hop, 2*hop, ...
         starts = [i * hop for i in range(T)]
         segs = torch.stack([x_bcl[..., s:s + n_fft] for s in starts], dim=2)  # [B, C, T, n_fft]
-        segs = segs * self._fft_window.view(1, 1, 1, -1).to(segs.dtype)       # hann window
+        if n_fft not in self._window_cache:
+            self._window_cache[n_fft] = torch.hann_window(n_fft)
+        win = self._window_cache[n_fft].to(device=segs.device, dtype=segs.dtype)
+        segs = segs * win.view(1, 1, 1, -1)                                   # hann window
 
         spec = torch.fft.rfft(segs, n=n_fft, dim=-1)  # [B, C, T, Fdim] complex
         mag = spec.abs()                               # [B, C, T, Fdim]
@@ -149,16 +186,16 @@ class BSSTNFlex(nn.Module):
         return z
 
     # ---------- edges ----------
-    def _phys_edge_index(self, C: int, device: torch.device) -> torch.Tensor:
+    def _phys_edge_index(self, C: int, T: int, device: torch.device) -> torch.Tensor:
         """
         Physical edges are deterministic given C and T: build once and cache on CPU,
         then move to device.
         Nodes are indexed time-major: node_id = t*C + sensor_id.
         """
-        if C in self._phys_edge_cache:
-            return self._phys_edge_cache[C].to(device)
+        cache_key = (C, T)
+        if cache_key in self._phys_edge_cache:
+            return self._phys_edge_cache[cache_key].to(device)
 
-        T = self.cfg.T
         edges: List[Tuple[int, int]] = []
 
         def add_undir(u: int, v: int) -> None:
@@ -188,7 +225,7 @@ class BSSTNFlex(nn.Module):
 
         edge_index = torch.tensor(edges, dtype=torch.long).t().contiguous()
         edge_index, _ = add_self_loops(edge_index, num_nodes=T * C)
-        self._phys_edge_cache[C] = edge_index.cpu()
+        self._phys_edge_cache[cache_key] = edge_index.cpu()
         return edge_index.to(device)
 
     def _func_edge_index_one(self, z_tcf: torch.Tensor, device: torch.device) -> torch.Tensor:
@@ -244,7 +281,7 @@ class BSSTNFlex(nn.Module):
         # time-major node features: [B, T*C, Fdim]
         x_nodes = z_btcf.reshape(B, T * C, Fdim)
 
-        edgeD = self._phys_edge_index(C, device)
+        edgeD = self._phys_edge_index(C, T, device)
 
         dataF_list: List[Data] = []
         dataD_list: List[Data] = []
@@ -258,12 +295,11 @@ class BSSTNFlex(nn.Module):
         return Batch.from_data_list(dataF_list), Batch.from_data_list(dataD_list)
 
     # ---------- core forward ----------
-    def _mid_step_idx(self, B: int, C: int, device: torch.device) -> torch.Tensor:
+    def _mid_step_idx(self, B: int, C: int, T: int, device: torch.device) -> torch.Tensor:
         """
         Indices for nodes at the middle time step (t = T//2) for each graph in the batch.
         Assumes fixed nodes per graph = T*C and Batch node order is graph-major.
         """
-        T = self.cfg.T
         mid_t = T // 2
         stride = T * C
         start = mid_t * C
@@ -291,27 +327,31 @@ class BSSTNFlex(nn.Module):
             x = self.add_awgn(x, float(snr_db))
 
         # FFT embeddings
+        n_fft, hop, T = self._effective_fft_params(L)
         if self.detach_feature:
             with torch.no_grad():
-                z = self._extract_fft_feats(x)  # [B,T,C,F]
+                z = self._extract_fft_feats(x, n_fft=n_fft, hop=hop, T=T)  # [B,T,C,F]
         else:
-            z = self._extract_fft_feats(x)
+            z = self._extract_fft_feats(x, n_fft=n_fft, hop=hop, T=T)
+        z = self._resize_freq(z, self.Fdim)
 
         # Build PyG batches
         dataF, dataD = self._build_pyg_batches(z)
 
         # Add temporal/spatial embeddings (slice spatial embeddings to actual C)
-        T = self.cfg.T
+        T = z.shape[1]
         SembF = self.SembF[:C].to(z.device)
         SembD = self.SembD[:C].to(z.device)
 
         # data?.x is graph-major: [B*T*C, F]
         xF = dataF.x.view(B, T, C, self.Fdim).permute(0, 2, 1, 3)  # [B,C,T,F]
-        xF = xF + self.TembF.to(z.device).unsqueeze(0).unsqueeze(1) + SembF.unsqueeze(0).unsqueeze(2)
+        TembF = self.TembF[:T].to(z.device)
+        xF = xF + TembF.unsqueeze(0).unsqueeze(1) + SembF.unsqueeze(0).unsqueeze(2)
         xF = xF.permute(0, 2, 1, 3).reshape(B * T * C, self.Fdim)
 
         xD = dataD.x.view(B, T, C, self.Fdim).permute(0, 2, 1, 3)  # [B,C,T,F]
-        xD = xD + self.TembD.to(z.device).unsqueeze(0).unsqueeze(1) + SembD.unsqueeze(0).unsqueeze(2)
+        TembD = self.TembD[:T].to(z.device)
+        xD = xD + TembD.unsqueeze(0).unsqueeze(1) + SembD.unsqueeze(0).unsqueeze(2)
         xD = xD.permute(0, 2, 1, 3).reshape(B * T * C, self.Fdim)
 
         # Replace batch x with embedded x
@@ -319,7 +359,7 @@ class BSSTNFlex(nn.Module):
         dataD.x = xD
 
         # Mid-step node indices (for pooling)
-        idx = self._mid_step_idx(B, C, z.device)
+        idx = self._mid_step_idx(B, C, T, z.device)
         bF = dataF.batch[idx]
         bD = dataD.batch[idx]
 

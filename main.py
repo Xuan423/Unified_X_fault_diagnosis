@@ -16,6 +16,7 @@ from configs.config import parse_arguments,config_network
 import os
 import pandas as pd
 import multiprocessing
+import re
 # import swanlab as wandb
 
 # os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
@@ -35,43 +36,77 @@ if __name__ == '__main__':
 
     meta_args = parser.parse_args()
     config_dir = meta_args.config_dir
+    def _format_run_tag(target):
+        if target is None:
+            return "target_unknown"
+        if isinstance(target, list):
+            tag = "+".join(str(item) for item in target)
+        else:
+            tag = str(target)
+        return "target" + re.sub(r"[\\/: ]+", "_", tag)
+
+    def _iter_targets(args):
+        target_list = getattr(args, "target_list", None)
+        if target_list:
+            source_list = getattr(args, "source_list", None)
+            if source_list:
+                if len(source_list) != len(target_list):
+                    raise ValueError("source_list length must match target_list length.")
+                for source, target in zip(source_list, target_list):
+                    yield target, source
+            else:
+                for target in target_list:
+                    yield target, getattr(args, "source", None)
+        else:
+            yield getattr(args, "target", None), getattr(args, "source", None)
+
     for it in range(iteration):
-        configs,args,path,name = parse_arguments(config_dir,it)
-        # for target in args.target_list:
-            # args.target = target
-        seed_everything(args.seed + it) # 17 args.seed 
-        # wandb.init(project=args.dataset_task, name=name,notes=meta_args.notes) 
+        _, base_args, _, _ = parse_arguments(
+            config_dir,
+            it,
+            create_path=False,
+            verbose=False,
+        )
+        for target, source in _iter_targets(base_args):
+            run_tag = _format_run_tag(target)
+            configs, args, path, name = parse_arguments(
+                config_dir,
+                it,
+                run_tag=run_tag,
+                target_override=target,
+                source_override=source,
+            )
+            seed_everything(args.seed + it) # 17 args.seed
+            # wandb.init(project=args.dataset_task, name=name,notes=meta_args.notes)
 
+            # 初始化模型
+            signal_processing_modules, feature_extractor_modules = config_network(configs,args)
 
-        # 初始化模型
-        signal_processing_modules, feature_extractor_modules = config_network(configs,args)
+            MODEL_DICT = {
+                'TSPN': lambda args: Transparent_Signal_Processing_Network(signal_processing_modules, feature_extractor_modules,args),
+                'TKAN': lambda args: Transparent_Signal_Processing_KAN(signal_processing_modules, feature_extractor_modules,args),
+                'NNSPN': lambda args: NN_Signal_Processing_Network(signal_processing_modules, feature_extractor_modules,args),
+                'TFON': lambda args: Time_Frequency_Operator_Network(signal_processing_modules, feature_extractor_modules,args),
+            }
 
+            model_plain = MODEL_DICT[args.model](args)
 
-        MODEL_DICT = {
-            'TSPN': lambda args: Transparent_Signal_Processing_Network(signal_processing_modules, feature_extractor_modules,args),
-            'TKAN': lambda args: Transparent_Signal_Processing_KAN(signal_processing_modules, feature_extractor_modules,args),
-            'NNSPN': lambda args: NN_Signal_Processing_Network(signal_processing_modules, feature_extractor_modules,args),
-            'TFON': lambda args: Time_Frequency_Operator_Network(signal_processing_modules, feature_extractor_modules,args),
-        }
+            # network = Transparent_Signal_Processing_Network(signal_processing_modules, feature_extractor_modules,args)
+            #model trainer #
+            model = Basic_plmodel(model_plain, args)
+            model_structure = print(model.network)
+            trainer,train_dataloader, val_dataloader, test_dataloader = trainer_set(args,path)
 
-        model_plain = MODEL_DICT[args.model](args)
+            # train
+            trainer.fit(model,train_dataloader, val_dataloader) # TODO load best checkpoint
 
-        # network = Transparent_Signal_Processing_Network(signal_processing_modules, feature_extractor_modules,args)
-        #model trainer #
-        model = Basic_plmodel(model_plain, args)
-        model_structure = print(model.network)
-        trainer,train_dataloader, val_dataloader, test_dataloader = trainer_set(args,path)
+            model = load_best_model_checkpoint(model,trainer)
 
-        # train
-        trainer.fit(model,train_dataloader, val_dataloader) # TODO load best checkpoint
+            result = trainer.test(model,test_dataloader)
 
-        model = load_best_model_checkpoint(model,trainer)
-
-        result = trainer.test(model,test_dataloader)
-
-        # 保存结果
-        result_df = pd.DataFrame(result)
-        result_df.to_csv(os.path.join(path, 'test_result.csv'), index=False)
+            # 保存结果
+            result_df = pd.DataFrame(result)
+            result_df.to_csv(os.path.join(path, 'test_result.csv'), index=False)
             # wandb.finish()
         
 
